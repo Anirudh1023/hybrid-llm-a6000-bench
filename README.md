@@ -1,0 +1,104 @@
+# Hybrid LLM speculative decoding — A6000 benchmark
+
+Extends the T4-based diagnostic session (2026-07-22/23) onto a 48GB A6000,
+specifically to run the experiments the T4's 2x15.6GB VRAM couldn't support:
+genuinely large drafter:target ratios (30B+ targets), a properly
+ratio-matched same-family vs cross-family comparison, isolated
+quantization-overhead measurement, and a corrected full reverse-KL pipeline
+that applies every fix found on the T4 in the right order.
+
+**Read `CONCLUSIONS.md` first** — it's the living summary of what's proven,
+what's still open, and what each experiment here is meant to resolve. Update
+it as you go; it's meant to accumulate across sessions, not just describe
+tonight's T4 work.
+
+## Setup
+
+```bash
+pip install -r requirements.txt
+huggingface-cli login   # needs gated-repo access for Gemma models
+```
+
+VRAM budget (single 48GB A6000) — keep this in mind when picking model IDs
+in the experiment scripts:
+- 30B+ targets: 8-bit only (fp16 needs ~2x the model size in GB, won't fit)
+- Up to ~20B targets: fp16 is viable (~2GB/B param), useful for isolating
+  quantization overhead cleanly (see `exp05`)
+- Drafters (0.5B–3B): fp16 is always fine, negligible VRAM either way
+
+## Layout
+
+```
+src/                 reusable core (import from experiments/ scripts)
+  harness.py          measure_baseline / measure_sd / run_full_comparison
+  vocab_utils.py       config.vocab_size native-path check (see below — READ THIS)
+  lora_utils.py        merge_and_unload wrapper (see below — READ THIS)
+  reverse_kl_train.py  the FIXED OmniDraft-style reverse-KL training script
+data/                prompt sets (LoCoMo-derived, same 30-prompt set used on the T4)
+experiments/         exp01-exp06, each independently runnable
+results/             JSON output from each experiment, read by report.py
+run_all.py           orchestrates experiments in a sensible order
+report.py            builds BENCHMARK_REPORT.md from results/*.json
+CONCLUSIONS.md        the living summary — read/update this every session
+```
+
+## Two things to internalize before running anything
+
+**1. `config.vocab_size` equality, not tokenizer class or vocab overlap, gates
+HF's native (translator-free) assisted-generation path.** Two checkpoints of
+the literal same tokenizer can have different `config.vocab_size` (embedding
+table padding) and get silently routed through the slower cross-vocab
+translator anyway. Always call `vocab_utils.check_native_path(target_id,
+draft_id)` before assuming a "same-family" experiment is testing what you
+think it's testing — this exact mistake invalidated a same-family conclusion
+on the T4 session.
+
+**2. Always `merge_and_unload()` a LoRA adapter before measuring inference
+speed**, unless you specifically need to keep training it further. An
+unmerged adapter measured 44% slower per forward pass than the same
+weights merged — pure overhead from computing the low-rank update live on
+every call, nothing to do with the adapter's actual learned behavior. This
+was the single biggest confound in the T4 session's "does reverse-KL
+training help" question — see `CONCLUSIONS.md`.
+
+## Running experiments
+
+```bash
+cd experiments
+python exp04_lora_overhead_at_scale.py     # cheap, no target model, run first
+python exp01_large_target_ratio.py
+python exp02_matched_ratio_family_test.py
+python exp05_quantization_isolation.py
+
+# these two need a trained adapter first:
+python ../src/reverse_kl_train.py --target-id google/gemma-2-27b --save-dir trained_drafter
+python exp03_fixed_vs_adaptive_draft_length.py
+python exp06_full_reverse_kl_pipeline.py
+
+cd ..
+python report.py    # -> BENCHMARK_REPORT.md, all results consolidated + compared vs T4 baselines
+```
+
+Or just: `python run_all.py --with-training` to run everything in order.
+
+## What each experiment is FOR (not just what it does)
+
+| Experiment | Question it answers | Why the T4 couldn't answer it |
+|---|---|---|
+| exp01 | Does a genuinely large ratio (literature-scale, 28:1-280:1) give the speedup the literature reports, on our own harness? | T4 topped out at 18.2:1 — never reached the range where cross-family SD is actually validated in the literature |
+| exp02 | Same-family vs cross-family, ratio held constant | T4's same-family test conflated ratio AND a silent cross-vocab-path fallback — never a clean comparison |
+| exp03 | Does the adaptive-draft-length overshoot problem get better or worse at bigger target scale? | T4 could only test at 9B; reasoned (not measured) that bigger targets being more memory-bound should shrink this effect |
+| exp04 | Is LoRA's ~44% per-step overhead specific to Qwen3-0.6B, or does it reproduce elsewhere? | Only ever measured on one drafter, one adapter config |
+| exp05 | How much does 8-bit quantization itself cost, in isolation? | T4 had no choice but 8-bit for anything past ~7B — never had a fp16 control |
+| exp06 | With every known fix applied (merge, fixed-length option, real target scale) — does reverse-KL training finally show a genuine wall-clock win? | The "ultimate" test — nothing this clean was possible on the T4 rig |
+
+## What's explicitly NOT in scope here (see CONCLUSIONS.md "still missing")
+
+Building OmniDraft's actual online n-gram cache and acceptance-prediction
+head is a separate, larger engineering task — not something to squeeze into
+a benchmarking session. These experiments are about getting the CORRECTLY
+MEASURED ceiling of what our current (incomplete) implementation can do at
+real scale, and isolating every confound we can, before deciding whether
+building those two missing pieces is actually necessary or whether these
+fixes (merge, fixed draft length, bigger ratio) already get us most of the
+way there.

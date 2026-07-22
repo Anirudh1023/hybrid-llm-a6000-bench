@@ -1,0 +1,6 @@
+transformers>=4.57
+accelerate
+bitsandbytes
+peft
+torchao
+torch
