@@ -50,18 +50,22 @@ every correction is noted below rather than hidden).
   properly controlled same-family-at-matched-ratio test has never been
   run** — that's `exp02` in this repo, specifically because it didn't
   happen on the T4.
-- ~~"+10.6% tok/call means reverse-KL training helps"~~ **CORRECTED, twice.**
-  First correction: the +10.6% tok/call gain came with a **wall-clock
-  regression** (1.295x → 1.042x, 28/30 prompts worse) — tok/call and
-  wall-clock diverged, and only wall-clock is what a user actually
-  experiences. Second correction (this is the live, unresolved state):
-  fixing draft length recovered part of the gap (1.042x → 1.210x) but not
-  all of it, and merging the LoRA adapter (removing the confirmed 44%
-  per-step overhead) may recover more still — `exp06` in this repo is
-  specifically the "redo it with every known fix applied, in the right
-  order" experiment that was never cleanly run on the T4 (the merge fix was
-  found too late in that session to redo the full comparison there before
-  moving to this repo).
+- ~~"+10.6% tok/call means reverse-KL training helps"~~ **CORRECTED, three
+  times now.** (1) The +10.6% tok/call gain came with a **wall-clock
+  regression** (1.313x untrained → 1.042x trained-unmerged-adaptive, ~21-28/30
+  prompts worse depending on the exact run) — tok/call and wall-clock
+  diverged, only wall-clock is what a user experiences. (2) Fixing draft
+  length alone recovered PART of the gap (1.042x → 1.210x) but not all of
+  it. (3) Merging the LoRA adapter alone ALSO recovered a similar amount
+  (1.042x → 1.208x) but ALSO not all of it — landing at almost the exact
+  same point as the fixed-length fix, independently. **This strongly
+  suggests the two costs (LoRA per-step overhead, adaptive-heuristic
+  overshoot) are separate and additive, and neither fix alone is
+  sufficient — you likely need BOTH together.** That combined test
+  (merge + fixed length, simultaneously) was never run on the T4 before
+  this repo was started — it's exactly what `exp06` does, at real scale.
+  Current honest state: reverse-KL training's wall-clock verdict is STILL
+  OPEN, narrowed to one well-specified remaining test, not resolved.
 
 ## What's real but still unresolved
 

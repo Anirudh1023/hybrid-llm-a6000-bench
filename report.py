@@ -26,6 +26,7 @@ T4_BASELINES = {
     "truly_native_qwen2.5_0.5b_qwen2.5_3b_6.2to1": 1.339,
     "trained_reverse_kl_adaptive_UNMERGED": 1.042,
     "trained_reverse_kl_fixed4_UNMERGED": 1.210,
+    "trained_reverse_kl_adaptive_MERGED": 1.208,
     "lora_overhead_isolated_unmerged": 1.443,
     "lora_overhead_isolated_merged": 0.976,
 }
