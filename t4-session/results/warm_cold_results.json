@@ -1,0 +1,66 @@
+[
+  {
+    "t_cold": 6.922631025314331,
+    "t_warm": 6.603445053100586,
+    "speedup": 1.0483362804789107,
+    "match": true,
+    "text_cold": " Sure! I took this photo during a particularly challenging time in my life. But even then, I found beauty in the world around me. It helped me stay positive and motivated to keep moving forward.\n",
+    "text_warm": " Sure! I took this photo during a particularly challenging time in my life. But even then, I found beauty in the world around me. It helped me stay positive and motivated to keep moving forward.\n"
+  },
+  {
+    "t_cold": 6.70438027381897,
+    "t_warm": 6.540508270263672,
+    "speedup": 1.025054934079105,
+    "match": false,
+    "text_cold": " Sure, she loved to travel and would always pack her bags and books. She'd read on the plane and then we'd explore new places together. It was a great bonding experience for us.\nJ",
+    "text_warm": " Sure, she loved to travel and would always pack her bags and get excited for trips. She even took a trip to Europe with me a few years ago.\nJolene: That's amazing!"
+  },
+  {
+    "t_cold": 6.777507781982422,
+    "t_warm": 6.632213115692139,
+    "speedup": 1.0219074181959729,
+    "match": false,
+    "text_cold": " Sure! I remember one time she played a game with me and we both laughed so hard. It was a simple puzzle game, but we had a blast. I think it was called \"Bej",
+    "text_warm": " Sure! I remember one time she played a game with me and it was so much fun. It was a puzzle game where we had to solve riddles together. It was like a bonding experience.\n"
+  },
+  {
+    "t_cold": 6.677222967147827,
+    "t_warm": 6.600432872772217,
+    "speedup": 1.0116340997410005,
+    "match": true,
+    "text_cold": " Sure. I feel like I'm always behind and I don't know how to catch up. I'm worried I won't be able to finish everything on time.\nDeborah: I understand. Let",
+    "text_warm": " Sure. I feel like I'm always behind and I don't know how to catch up. I'm worried I won't be able to finish everything on time.\nDeborah: I understand. Let"
+  },
+  {
+    "t_cold": 6.714649677276611,
+    "t_warm": 6.526514530181885,
+    "speedup": 1.028826281811631,
+    "match": true,
+    "text_cold": " Sure! Susie is a cat, and she's always there for me when I'm feeling down or stressed. She's very affectionate and loves to cuddle. Plus, having a pet around",
+    "text_warm": " Sure! Susie is a cat, and she's always there for me when I'm feeling down or stressed. She's very affectionate and loves to cuddle. Plus, having a pet around"
+  },
+  {
+    "t_cold": 6.777011156082153,
+    "t_warm": 6.630017995834351,
+    "speedup": 1.0221708538860919,
+    "match": false,
+    "text_cold": " Sure! We played Super Smash Bros. and it was always so much fun. We'd compete and laugh at each other's slip-ups. It's a great way to unwind and enjoy each other's",
+    "text_warm": " Sure! We played Super Smash Bros. and it was always so much fun. We'd compete and laugh at each other's mistakes. It's a great way to unwind and have a good time.\n"
+  },
+  {
+    "t_cold": 6.627026081085205,
+    "t_warm": 6.448437690734863,
+    "speedup": 1.027694830735038,
+    "match": false,
+    "text_cold": " Sure! The Eisenhower Matrix is a tool that helps you prioritize tasks based on their urgency and importance. It has four quadrants: urgent and important, important but not urgent, urgent but not important,",
+    "text_warm": " Sure! The Eisenhower Matrix is a tool for managing your time and tasks effectively. It was developed by President Dwight D. Eisenhower and is also known as the Urgent-Important Matrix. The matrix divides"
+  },
+  {
+    "t_cold": 6.682757616043091,
+    "t_warm": 6.564348459243774,
+    "speedup": 1.0180382192588475,
+    "match": false,
+    "text_cold": " Sure, I'm talking about the wooden box set. It's a gift for my sister's wedding. I want to make sure it's perfect.\nJolene: Oh, got it. You",
+    "text_warm": " Sure, I'm referring to the wooden box set. It's a gift for my sister's wedding. I want to make sure it's perfect for her special day.\nJolene: Oh,"
+  }
+]

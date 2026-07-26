@@ -1,0 +1,98 @@
+[
+  {
+    "history_A": "Jolene: It was amazing! Doing yoga with that backdrop made me feel connected to nature and myself. I felt incredibly peaceful and thankful.\nDeborah: Like, it's no wonder looking at such beauty can really help us refocus and connect with who we are. Have you ever experienced that?\nJolene: I remember taking a hike with my partner and coming across a waterfall oasis. Everything just felt so peaceful and my worries just disappeared. It was such a refreshing experience.\nDeborah: Are you planning to experience it again soon?",
+    "history_B": "Jolene: Yeah! I'm planning to get out in nature again next month. It's going to be great reconnecting with it!\nDeborah:  Enjoy it! This photo made me think of a gorgeous blossom tree from near my home. Every spring, it was magical to watch it bloom.\nJolene: That sounds magical! How was it watching the tree bloom each spring?\nDeborah: It was like admiring nature's artwork. It filled me with awe and made me appreciate the beauty of life. Even in tough times, there's hope for growth.",
+    "ground_truth": "This photo I took is a great visual representation of that idea. It reminds me that I can keep growing through any obstacles.",
+    "small_turnA": "Jolene: I'm so glad you're here. I'm so glad you're here. I'm so glad you're here.",
+    "final_small": "Deborah: I'm so glad you're here. I'm so glad you're here. I'm so glad you're here.\nDeborah: I",
+    "final_target_plain": "Jolene: That's a beautiful perspective. It's like nature reminds us that even in the darkest times, there's always a chance for something beautiful to grow.\nDeborah: Exactly",
+    "final_sd": "Jolene: That's a beautiful way to look at it. It's like nature's reminder that even in the darkest times, there's always hope for growth and beauty.\n",
+    "f1_small": 0.06896551724137931,
+    "f1_target_plain": 0.17391304347826086,
+    "f1_sd": 0.13043478260869565
+  },
+  {
+    "history_A": "Deborah: That's my old home. I go there now and then for my mom, who passed away. Sitting in that spot by the window gives me peace.\nJolene: Must be great to have that place where you feel connected to her.\nDeborah: Yeah, it's special. I can feel her presence when I sit there and it comforts me.\nJolene: Wow, it sounds like that spot holds a lot of sentimental value. Does it bring back any special memories?",
+    "history_B": "Deborah: Yeah, Jolene. She'd sit there every night with a book and a smile, reading was one of her hobbies. It was one of her favorite places in the house. \nJolene: What other hobbies did your mother have?\nDeborah: Travel was also her great passion!\nJolene: I want to show you one of my snakes! They always calm me down and make me happy. This is Susie.",
+    "ground_truth": "Having a pet totally brightens up your life. It's great that it brings you comfort. Do you have any fun moments with your pet that you'd like to share?",
+    "small_turnA": "Jolene: I'm not sure I'm going to be able to do that. I'm not sure I'm going to be able to do that.",
+    "final_small": "Jolene: I'm so glad you're here.\nJolene: I'm so glad you're here.\nJolene: I'm so glad you",
+    "final_target_plain": "Deborah: She's beautiful!\nJolene: She's a ball python.\nDeborah: I've never seen one before.\nJolene: They're very docile and easy",
+    "final_sd": "Deborah: Oh, she's beautiful!\nJolene: She's a ball python. She's a ball python. She's a ball python. She's a ball python",
+    "f1_small": 0.06060606060606061,
+    "f1_target_plain": 0.08888888888888889,
+    "f1_sd": 0.11764705882352941
+  },
+  {
+    "history_A": "Deborah: Hey Jolene, just catching up. I went to a cool event last week with the aim to support each other - pretty inspiring. Have you been connecting with anyone lately?\nJolene: Hey Deb, great to hear from you! I've been focusing on studying and my relationship with my partner. We're taking little trips to the beach, it's a great way to relax. How about you, anything new going on?\nDeborah: I was busy too - went to a community meetup last Friday. We shared stories and it was nice to feel how connected we are. It made me think about how important relationships are. How about you, how are things going in that area?\nJolene: I'm really thankful for my significant other right now. It's great to have someone encouraging my goals! How are things with your friends and family? Any updates on that front?",
+    "history_B": "Deborah: Relationships with family and friends are so vital. My yoga pals have been my second family - we've held each other up through a lot. The other day I found this old photo. That was when I first started doing yoga. My mum was my biggest fan and source of motivation. She'd often come to my classes with me.\nJolene: Our loved ones sure are supportive! When I was 10, my parents got me that and it was the start of my passion for video games.\nDeborah: Cool that they shared that with you. Did you learn on your own or did they teach you?\nJolene: I taught myself, but my dad was always supportive and my mom would play games with me.",
+    "ground_truth": "That's awesome! Sounds like you had a lot of support from your parents. What was your favorite game to play with mom?",
+    "small_turnA": "Jolene: I'm really thankful for my significant other. I'm thankful for my significant other. I'm thankful for my significant other. I'm thank",
+    "final_small": "Deborah: I'm thankful for my significant other. I'm thankful for my significant other. I'm thankful for my significant other. I'm thankful for",
+    "final_target_plain": "Deborah: That's great! I'm glad you had that support. I'm sure it helped you a lot.\nJolene: It did! I'm thankful for my parents",
+    "final_sd": "Deborah: That's great! I'm glad you had that support. I'm sure it helped you a lot.\nJolene: It did! I'm thankful for my parents",
+    "f1_small": 0.0,
+    "f1_target_plain": 0.37209302325581395,
+    "f1_sd": 0.37209302325581395
+  },
+  {
+    "history_A": "Jolene: That's cool! What made you want to start teaching it?\nDeborah: I find it calming and wanted to share that with others. Giving people peace and awareness brings me so much happiness.\nJolene: Wow, Deb! It's awesome when we can share something we love and make things better for others.\nDeborah: Teaching it is awesome because it can help others and I've made such great friends through it. It's really nice for building community connections.",
+    "history_B": "Jolene: That's really motivating. It's great to have support in tough times.\nDeborah: It's one of life's best parts, right?\nJolene: Yeah, having someone to rely on is key in tough times. It really makes a difference in how we handle life. Plus, there's something I wanted to tell you.\nDeborah: What's up? I'm listening. We'll figure it out.",
+    "ground_truth": "I'm having a hard time dealing with my Engineering assignments. It's a lot to manage and I'm struggling to keep up. Can we still talk about time management?",
+    "small_turnA": "Deborah: I'm so glad you're here. I'm so glad you're here.",
+    "final_small": "Deborah: I'm so glad you're here. I'm so glad you're here.\nDeborah: I'm so glad you're here. I",
+    "final_target_plain": "Jolene: I'm so glad you're here. I'm so glad you're here.\nDeborah: I'm so glad you're here. I'm so",
+    "final_sd": "Jolene: I'm so glad you're here. I'm so glad you're here.\nDeborah: I'm so glad you're here. I'm so",
+    "f1_small": 0.11764705882352941,
+    "f1_target_plain": 0.1142857142857143,
+    "f1_sd": 0.1142857142857143
+  },
+  {
+    "history_A": "Jolene: Yeah, totally! Our surroundings can really affect our mood and how much zen we can get from our routine. Creating a place that feels safe and chill is key.\nDeborah: Wow, that looks so comfy and inviting! Where do you usually go to relax in your house?\nJolene: In my room, I usually go to relax and feel at ease. After a busy day, it's my little haven for peace and rest - the perfect spot to relax and recharge.\nDeborah: Sounds like your room does the job. That's awesome.",
+    "history_B": "Jolene:  Here are my pals keeping me company.\nDeborah: Hey, that's Susie or Seraphim? How long has he been hanging out with you?\nJolene: It`s Susie! I've had her for two years now. \nDeborah: It's awesome how pets can bring us comfort and peace when we need it.",
+    "ground_truth": "Susie is a great companion.",
+    "small_turnA": "Deborah: I love the way you look at your room. I love the way you look at your room. I love the way you look at your room. I love the way you",
+    "final_small": "Deborah: I love the way you look at your room. I love the way you look at your room. I love the way you look at your room. I love the way you look",
+    "final_target_plain": "Jolene: Yeah, they're like our furry friends who always know when we need a hug or a cuddle.\nDeborah: That's so true. They're like our furry friends",
+    "final_sd": "Jolene: Yeah, they're like our furry friends who always make us feel better.\nDeborah: I'm glad you have a furry friend to keep you company.\nJolene:",
+    "f1_small": 0.0,
+    "f1_target_plain": 0.07142857142857142,
+    "f1_sd": 0.06666666666666667
+  },
+  {
+    "history_A": "Jolene:  Was it rewarding seeing everyone come together? Can you tell me more about how you put it together? Also, any tips for maintaining a balance between hobbies and studies?\nDeborah:  I reached out to different nearby businesses and places to make it happen. We had yoga, food stalls, and even some live music - it was amazing! As for balancing hobbies and studies, I find it helpful to prioritize and manage my time effectively. Making a schedule and setting aside specific time for studying and pursuing hobbies can go a long way in maintaining balance.\nJolene: Wow, that's awesome! Gonna make a plan to manage my studies and hobbies. Say, do you ever play video games?\nDeborah: I used to play some video games, but it's been a while. It's a good way to relax after a busy day. Do you have any game suggestions? What's your favorite game?",
+    "history_B": "Jolene: I have a few game recommendations. Zelda BOTW for Switch is an awesome open-world game. Animal Crossing: New Horizons is really calming and cute. As for my favorite game, it's hard to choose just one!\nDeborah: Cool recs! I'll definitely check those out. What about your favorite memories of playing video games?\n\nJolene: Oh, I forgot to mention Overcooked 2 - this is a good co-op game if you're into hilarious and chaotic cooking. My partner and I often play for bets! I once won three large pizzas!\nDeborah: Reminds me of when I used to play games with my husband. We'd take turns and it was a great way to bond and make memories. Gaming really can bring people closer, right?",
+    "ground_truth": "Yeah, you`re right! What's your favorite game to play with that person?",
+    "small_turnA": "Deborah: I'm a big fan of the game, but I'm a big fan of the game. I'm a big fan of the game, but I'm",
+    "final_small": "Deborah: I'm a big fan of the game, but I'm a big fan of the game. I'm a big fan of the game, but I'm a",
+    "final_target_plain": "Jolene: Absolutely! It's a great way to connect with friends and family. What about you? Do you have any favorite memories of playing games?\nDeborah: I remember playing Mario Kart",
+    "final_sd": "Jolene: Absolutely! It's a great way to connect with friends and family. What about you? Do you have any favorite memories of playing games?\nDeborah: I remember playing Mario Kart",
+    "f1_small": 0.08333333333333333,
+    "f1_target_plain": 0.2790697674418604,
+    "f1_sd": 0.2790697674418604
+  },
+  {
+    "history_A": "Deborah: The Eisenhower Matrix sorts tasks into four boxes, categorizing them based on their urgency and importance. It can be really useful for organizing and prioritizing. Here's a breakdown. \nJolene: The visualization is helpful too. Thanks for sharing!\nDeborah: I am glad, it was helpful. Let's give it a try and see if it helps you stay focused and less stressed. \nJolene: Yeah, I'll give it a go. Fingers crossed it'll help me. Thanks for the help!",
+    "history_B": "Deborah: Don't forget to take it easy and look after yourself. Wishing you all the best! Recently, Anna and I were sitting by the sea, watching the sunset and talking about each other. And we realized that we inspire each other. What thoughts does the sea in this photo make you think of?\nJolene: This gets me thinking of when I'll learn to surf. Gotta find that spare time!\nDeborah: Surfing, huh Jolene? Chase your dreams, don't be daunted. Have you thought about the steps you can take?\nJolene: Definitely! I've been gathering information, watching videos, and I even got a beginners' guide to surfing. Just need to find the right time and place to get a lesson.",
+    "ground_truth": "Way to go! Taking those first steps is key. Believe in yourself and keep going!",
+    "small_turnA": "Jolene: I'm glad you're here. I'm glad you're here.",
+    "final_small": "Jolene: I'm glad you're here. I'm glad you're here.\nJolene: I'm glad you're here. I'm glad",
+    "final_target_plain": "Deborah: That's great! I'm sure you'll be a pro in no time. Keep us posted on your progress.\nJolene: Thanks, Deborah! I'll definitely",
+    "final_sd": "Deborah: That's great! I'm sure you'll be a pro in no time. Keep up the good work!\nJolene: Thanks, Deborah! I'm excited to",
+    "f1_small": 0.0,
+    "f1_target_plain": 0.10256410256410255,
+    "f1_sd": 0.15384615384615385
+  },
+  {
+    "history_A": "Deborah: Cool that they shared that with you. Did you learn on your own or did they teach you?\nJolene: I taught myself, but my dad was always supportive and my mom would play games with me. \nDeborah: That's awesome! Sounds like you had a lot of support from your parents. What was your favorite game to play with mom?\nJolene: One of my favorites was \"Monster Hunter: World\". The immersive story and open-world gaming are amazing!",
+    "history_B": "Deborah:  It can be so freeing when you get immersed in a game like that. \nJolene: Yeah! It's my way to de-stress and take a break from life.\nDeborah: What's up this month? Anything fun happening for you?\nJolene: Got a lot of finals coming up this month, so I've been studying real hard. It's been quite stressful, but it'll be worth it in the end. Thinking about taking a trip somewhere to relax and recharge afterward.",
+    "ground_truth": "Good luck with it! Let me know if there's anything I can do to assist you.",
+    "small_turnA": "Jolene: I'm a big fan of the game. I'm a big fan of the game. I'm a big fan of the game. I'm a big",
+    "final_small": "Deborah: I'm a big fan of the game. I'm a big fan of the game. I'm a big fan of the game. I'm a big fan",
+    "final_target_plain": "Deborah: That's a great idea! You deserve a break after all that hard work.\nJolene: Thanks! I'm looking forward to it.\nDeborah: What's your",
+    "final_sd": "Deborah: That's a great idea! You deserve a break after all that hard work.\nJolene: Thanks! I'm looking forward to it.\nDeborah: What's your",
+    "f1_small": 0.07692307692307691,
+    "f1_target_plain": 0.25,
+    "f1_sd": 0.25
+  }
+]

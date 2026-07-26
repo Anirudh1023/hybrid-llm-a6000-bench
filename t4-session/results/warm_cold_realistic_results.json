@@ -1,0 +1,66 @@
+[
+  {
+    "t_cold": 8.873523712158203,
+    "t_warm": 7.0396568775177,
+    "speedup": 1.2605051448597242,
+    "match": false,
+    "text_cold": " Jolene: Sure! My parents were both gamers, and they introduced me to the world of video games when I was young. They played with me and encouraged me to explore different genres. It",
+    "text_warm": " Jolene: Sure! My parents introduced me to video games when I was young. They bought me my first console and helped me set it up. They played with me and encouraged me to explore"
+  },
+  {
+    "t_cold": 9.06119966506958,
+    "t_warm": 7.039360761642456,
+    "speedup": 1.2872191058091729,
+    "match": false,
+    "text_cold": " Calvin: It's a beautiful shot, Dave! It's amazing how you can capture such vibrant colors and emotions through your lens. I'm glad you're enjoying photography. It's a wonderful way to",
+    "text_warm": " Calvin: It's a beautiful shot, Dave! It captures the essence of a perfect sunset. I'm glad you found it inspiring. Photography is a wonderful way to capture moments and share them with others"
+  },
+  {
+    "t_cold": 9.21650218963623,
+    "t_warm": 7.022591590881348,
+    "speedup": 1.3124075450441428,
+    "match": false,
+    "text_cold": " Jolene: This month, I've been focusing on my studies and spending quality time with my partner. We're planning a trip to the mountains for the weekend. It's going to be great",
+    "text_warm": " Jolene: This month, I've been focusing on my studies and spending quality time with my partner. We're planning a trip to the mountains for a weekend getaway. It's going to be"
+  },
+  {
+    "t_cold": 9.56298542022705,
+    "t_warm": 7.060713291168213,
+    "speedup": 1.3543936746714764,
+    "match": true,
+    "text_cold": " Maybe we could collaborate on a project or share tips on our hobbies.\nCalvin: That sounds like a great idea! Let's plan something. Maybe we can combine our skills and create something unique.",
+    "text_warm": " Maybe we could collaborate on a project or share tips on our hobbies.\nCalvin: That sounds like a great idea! Let's plan something. Maybe we can combine our skills and create something unique."
+  },
+  {
+    "t_cold": 9.374889135360718,
+    "t_warm": 6.977915287017822,
+    "speedup": 1.3435085909974265,
+    "match": false,
+    "text_cold": " I mean, do you still meditate regularly?\nJolene: Yes, I do. It's become a part of my daily routine. I find it really helps with stress and focus. Deborah",
+    "text_warm": " I mean, do you still meditate regularly?\nJolene: Yes, I do! It's become a part of my daily routine. I find it really helps with my focus and stress levels"
+  },
+  {
+    "t_cold": 9.156473875045776,
+    "t_warm": 7.097838401794434,
+    "speedup": 1.2900369600878614,
+    "match": false,
+    "text_cold": " Dave: The hardest part was probably the patience required. Restoring a car is a long process and it's easy to get frustrated when things don't go as planned. But I learned to take it",
+    "text_warm": " Dave: The hardest part was probably the long hours and the meticulous attention to detail required to restore the car. But it's all worth it in the end. Calvin: I can imagine! It's"
+  },
+  {
+    "t_cold": 9.180327415466309,
+    "t_warm": 7.123422384262085,
+    "speedup": 1.2887523609085128,
+    "match": false,
+    "text_cold": " Deborah: I love the design! It's unique and reflects your interests. If I were you, I might add some more vibrant colors to make it pop even more. But overall, it's fantastic",
+    "text_warm": " Deborah: I love the design! It's unique and reflects your interests. I think it's perfect as it is. But if I could suggest, maybe adding some more vibrant colors could make it pop"
+  },
+  {
+    "t_cold": 9.345075368881226,
+    "t_warm": 7.067996263504028,
+    "speedup": 1.3221675593031954,
+    "match": false,
+    "text_cold": " Dave: Hey Calvin, that's awesome! I'm glad you're enjoying your photography. It's a great way to express yourself and capture moments. As for your car project, it sounds like you",
+    "text_warm": " Dave: Hey Calvin, that sounds like an incredible experience! I'm glad you found it meaningful. For someone going through a similar situation, I'd suggest focusing on the present and cherishing every moment"
+  }
+]

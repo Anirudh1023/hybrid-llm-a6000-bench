@@ -1,0 +1,182 @@
+[
+  {
+    "prompt_idx": 0,
+    "reward": 0.15,
+    "generated": " I'm so grateful for the beauty in life.\nJolene: I'm so grateful for the beauty in life too. So, what's the main point of the conversation?\nA. The imp",
+    "ground_truth": "This photo I took is a great visual representation of that idea. It reminds me that I can keep growing through any obstacles."
+  },
+  {
+    "prompt_idx": 1,
+    "reward": 0.18604651162790697,
+    "generated": " She's a snake that's been with me for years. She's been with me since I was born. I'm a snake enthusiast. I love snakes. I'm a snake enthusiast. I lo",
+    "ground_truth": "Having a pet totally brightens up your life. It's great that it brings you comfort. Do you have any fun moments with your pet that you'd like to share"
+  },
+  {
+    "prompt_idx": 2,
+    "reward": 0.24390243902439024,
+    "generated": " I think that's the best way to learn. I'm really grateful for the support from my family.\nJolene: I'm really grateful for the support from my family.",
+    "ground_truth": "That's awesome! Sounds like you had a lot of support from your parents. What was your favorite game to play with mom?"
+  },
+  {
+    "prompt_idx": 3,
+    "reward": 0.21052631578947367,
+    "generated": " \n\nJolene: I'm going to tell you something. I'm going to tell you something that I want to share with you. I'm going to tell you something that I want",
+    "ground_truth": "I'm having a hard time dealing with my Engineering assignments. It's a lot to manage and I'm struggling to keep up. Can we still talk about time manag"
+  },
+  {
+    "prompt_idx": 4,
+    "reward": 0.13793103448275862,
+    "generated": " That's something I've always wanted to do. I'm going to take a walk with her and see how she does.\nJolene: That's a great idea! I'm going to do",
+    "ground_truth": "Susie is a great companion."
+  },
+  {
+    "prompt_idx": 5,
+    "reward": 0.19999999999999998,
+    "generated": " I think that's why we always come together when we're together.\n\nJolene: That's a great point! I think that's why we always come together when we're ",
+    "ground_truth": "Yeah, you`re right! What's your favorite game to play with that person?"
+  },
+  {
+    "prompt_idx": 6,
+    "reward": 0.08695652173913045,
+    "generated": " I'm so excited to try it out. I'm so excited to try it out. I'm so excited to try it out. I'm so excited to try it out. I'm so excited",
+    "ground_truth": "Way to go! Taking those first steps is key. Believe in yourself and keep going!"
+  },
+  {
+    "prompt_idx": 7,
+    "reward": 0.2162162162162162,
+    "generated": " I'm really excited about it!\nDeborah: That's a great plan! I'm really excited to hear that. I'm going to take a break from gaming too. I'm going to t",
+    "ground_truth": "Good luck with it! Let me know if there's anything I can do to assist you."
+  },
+  {
+    "prompt_idx": 8,
+    "reward": 0.09523809523809525,
+    "generated": " I'd love to see them!\nJolene: I'm not sure if I have any, but I'm excited to share them. I'm also looking forward to hearing from you!\nDeborah",
+    "ground_truth": " Working on a cool project now - a prototype that could revolutionize aerial surveillance. Can't wait to see the results!"
+  },
+  {
+    "prompt_idx": 9,
+    "reward": 0.0,
+    "generated": " \n\nBased on the conversation, what is the main purpose of the conversation?\nA) To discuss the future of the school system\nB) To discuss the future of ",
+    "ground_truth": "Stay safe!"
+  },
+  {
+    "prompt_idx": 10,
+    "reward": 0.2941176470588235,
+    "generated": " I'm really curious about your journey.\nEvan: I was always drawn to art, and I've been really inspired by the creativity and expression it brings. I s",
+    "ground_truth": "Thanks, Sam! It all started when a friend of mine gave me this painting one day, it inspired me a lot and that's when I started painting. And I joined"
+  },
+  {
+    "prompt_idx": 11,
+    "reward": 0.17391304347826086,
+    "generated": " Let's go!\nEvan: Great! I'll be there in a few minutes. Let's go!\n\nNow, the user is asking for the conversation to continue. The user's message is \"",
+    "ground_truth": "Hey Sam, it's an awesome pick! You'll love it there - clear water and gorgeous views. Have a blast and take lots of pics!"
+  },
+  {
+    "prompt_idx": 12,
+    "reward": 0.3055555555555555,
+    "generated": " I'm really looking for something that can help me stay focused and calm.\nEvan: That's a great idea! I think painting is a great way to help me stay f",
+    "ground_truth": "Of course, Sam! Painting is a great way to relieve stress and be creative. It gives you the freedom to explore colors and textures and express feeling"
+  },
+  {
+    "prompt_idx": 13,
+    "reward": 0.196078431372549,
+    "generated": " I'm so grateful for your support.\nSam: Thank you, Evan. I'm so grateful for your support too. I'm going to keep going.\nEvan: You're going to keep goi",
+    "ground_truth": "You're absolutely right! Celebrating those small wins is crucial. It's easy to get caught up in the challenges and setbacks, but those little victorie"
+  },
+  {
+    "prompt_idx": 14,
+    "reward": 0.08,
+    "generated": " \n\nSam: You're doing great, Evan! I'm so proud of you. Keep it up, I'm here for you.\n\nEvan: You're doing great, Sam! I'm so",
+    "ground_truth": "Your support means everything. Here's to moving forward!"
+  },
+  {
+    "prompt_idx": 15,
+    "reward": 0.10256410256410255,
+    "generated": " I think it's a great hobby.\nSam: I'm really interested in that. I'm going to try it out too. I think it's a great way to relax and get creative.\nE",
+    "ground_truth": "Wow! I hope I can find something I'm as passionate about as you are with watercolor painting."
+  },
+  {
+    "prompt_idx": 16,
+    "reward": 0.1111111111111111,
+    "generated": " I love it!\nSam: That's a great place! I've been thinking about it a lot lately. What do you think about the place?\nEvan: I love it! It's a",
+    "ground_truth": "Wow, that spot looks gorgeous. Growing up there must have been so peaceful and stunning."
+  },
+  {
+    "prompt_idx": 17,
+    "reward": 0.3103448275862069,
+    "generated": " I love how you can see the emotions in the painting and feel them too. I'm so inspired by your work!\nEvan: You're so right, Sam. Art is a powerful to",
+    "ground_truth": "It's amazing how art can express emotions so well. It really helps me recognize and handle my own feelings. This painting is giving me a massive rush "
+  },
+  {
+    "prompt_idx": 18,
+    "reward": 0.31111111111111117,
+    "generated": " I'm not sure if I'm doing it right. I'm so nervous about it. I need to get started now.\nEvan: Of course, Sam! Let's get started. I'm",
+    "ground_truth": "Sure Sam, I'd be glad to help. Let's get together and I'll show you some basic exercises. We'll reach our goals!"
+  },
+  {
+    "prompt_idx": 19,
+    "reward": 0.12121212121212122,
+    "generated": " \n\nNow, based on the conversation, what is the main theme of the conversation?\nA) The importance of health and fitness\nB) The importance of teamwork\nC",
+    "ground_truth": "Thanks, Evan. I'll stay positive and keep going. Your support means a lot."
+  },
+  {
+    "prompt_idx": 20,
+    "reward": 0.06896551724137931,
+    "generated": " \n\nWhat is the main topic of the conversation?\nA) The future of the rap industry\nB) The future of the music industry\nC) The future of the entertainmen",
+    "ground_truth": "I'll let you know when the podcast will be uploaded. Take care!"
+  },
+  {
+    "prompt_idx": 21,
+    "reward": 0.12244897959183673,
+    "generated": " \n\nCalvin: I'm so glad to hear that! I'm going to take a break from the car repair and go back to my studies. I know I can do better. I'm going",
+    "ground_truth": "You're really talented, Dave. Keep making people happy and doing what you love. That's what it's all about. See you soon, have a nice one!"
+  },
+  {
+    "prompt_idx": 22,
+    "reward": 0.2666666666666666,
+    "generated": " Dave: Yeah, I know. I'm going to keep going. I'm so excited to see what you're doing next. I'm so excited to see how far you've come. I'm",
+    "ground_truth": "Thanks, Calvin! Means a lot. I'm going to keep chasing my dreams and working hard. Conversations like this remind me why I love what I do."
+  },
+  {
+    "prompt_idx": 23,
+    "reward": 0.16949152542372883,
+    "generated": " I'm really interested in your car project.\nDave: I'm working on a car project. It's a bit complicated, but I'm excited to see what you think of it. I",
+    "ground_truth": "Hey Calvin, photography has been great for me! The car project is doing well - I just finished restoring it and it looks amazing. Wanna come by and ch"
+  },
+  {
+    "prompt_idx": 24,
+    "reward": 0.15384615384615383,
+    "generated": " I'm so excited to try it out. I'm so excited to try it out. I'm so excited to try it out. I'm so excited to try it out. I'm so excited",
+    "ground_truth": "I'm stoked, Calvin! We can crank up the music and have an awesome jam session. Can't wait!"
+  },
+  {
+    "prompt_idx": 25,
+    "reward": 0.16326530612244897,
+    "generated": " I'm really excited to see what's coming up.\nDave: I'm excited to hear what you're doing! I'm really looking forward to the tour. What's next for you?",
+    "ground_truth": "Hey, Boston's music scene is awesome! Tons of talented musicians and cool places to play. It'll be a blast performing there - I'll be there to cheer y"
+  },
+  {
+    "prompt_idx": 26,
+    "reward": 0.15384615384615383,
+    "generated": " I'm so grateful for the opportunity to perform with you.\nDave: That's so amazing! I'm so glad you're doing that. I'm so excited to hear that you're p",
+    "ground_truth": "That's great, Calvin. We both have discovered something that brings us fulfillment. It's a fortunate thing for us."
+  },
+  {
+    "prompt_idx": 27,
+    "reward": 0.08,
+    "generated": " I'm really looking forward to hearing more about the collaboration. Also, I'm excited to see how the tech and culture interact in the future. I'm hoo",
+    "ground_truth": "Thanks! I'll share some clips when everything's ready. Collaborating with various artists is always exciting, it's a chance to create something unique"
+  },
+  {
+    "prompt_idx": 28,
+    "reward": 0.08,
+    "generated": " I love that you're taking photos of nature. I love that you're taking photos of nature. I love that you're taking photos of nature. I love that you'r",
+    "ground_truth": "Thanks, Calvin! It's incredible how much emotion and beauty nature can convey through a photo."
+  },
+  {
+    "prompt_idx": 29,
+    "reward": 0.0930232558139535,
+    "generated": " I'm really impressed with the work you've done. I'm really looking forward to seeing more of your work!\nCalvin: Thank you Dave! I'm so glad to have y",
+    "ground_truth": "Yeah, I've been supporting some young musicians from a music program. Supporting their passion is amazing and their enthusiasm is inspiring."
+  }
+]

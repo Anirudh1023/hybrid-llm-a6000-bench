@@ -1,0 +1,67 @@
+[
+  {
+    "topic": "learning to cook",
+    "questions": [
+      {"q": "What's a good beginner-friendly vegetable to start cooking with?", "complexity": "simple"},
+      {"q": "How long should I sear a steak on each side?", "complexity": "simple"},
+      {"q": "What's a simple recipe I could practice basic knife skills on?", "complexity": "moderate"},
+      {"q": "How do I know when meat is properly cooked without a thermometer?", "complexity": "moderate"},
+      {"q": "If I only have 30 minutes on weeknights but want to eat healthier, how should I restructure my approach to meal prep versus cooking from scratch each night?", "complexity": "complex"},
+      {"q": "I want to get better at cooking but I also don't want to waste money on ingredients I won't use again -- how would you balance building a well-rounded pantry against minimizing waste as a beginner?", "complexity": "complex"},
+      {"q": "What's the difference between baking soda and baking powder?", "complexity": "simple"},
+      {"q": "What kitchen equipment is actually worth investing in early on?", "complexity": "moderate"}
+    ]
+  },
+  {
+    "topic": "starting a home garden",
+    "questions": [
+      {"q": "What's an easy vegetable for a beginner to grow?", "complexity": "simple"},
+      {"q": "How much sunlight do tomatoes need a day?", "complexity": "simple"},
+      {"q": "What's the biggest mistake beginners make when starting a garden?", "complexity": "moderate"},
+      {"q": "How do I know when it's actually time to harvest?", "complexity": "moderate"},
+      {"q": "I have a small balcony with partial shade for most of the day -- how should I think about which vegetables are even worth attempting versus which ones I should just skip?", "complexity": "complex"},
+      {"q": "If my soil test comes back showing both low nitrogen and slightly acidic pH, which problem should I address first, and does fixing one affect the other?", "complexity": "complex"},
+      {"q": "How often should I water seedlings?", "complexity": "simple"},
+      {"q": "What are some natural ways to deal with garden pests?", "complexity": "moderate"}
+    ]
+  },
+  {
+    "topic": "training for a first 5k run",
+    "questions": [
+      {"q": "How many days a week should a beginner run?", "complexity": "simple"},
+      {"q": "What kind of shoes should a beginner runner get?", "complexity": "simple"},
+      {"q": "What should I do if my knees start hurting during training?", "complexity": "moderate"},
+      {"q": "How do I know if I'm ready to race, versus needing more time?", "complexity": "moderate"},
+      {"q": "I have about 8 weeks before the race, I've never run more than a mile, and I have mild asthma -- how would you adjust a standard beginner training plan for that combination of constraints?", "complexity": "complex"},
+      {"q": "If I'm consistently hitting my mileage goals but my pace isn't improving at all, what does that actually tell you, and what would you change?", "complexity": "complex"},
+      {"q": "How important is stretching before running?", "complexity": "simple"},
+      {"q": "What should I eat before a training run?", "complexity": "moderate"}
+    ]
+  },
+  {
+    "topic": "basic personal budgeting",
+    "questions": [
+      {"q": "What's the simplest way for a beginner to start budgeting?", "complexity": "simple"},
+      {"q": "What's a common budgeting rule of thumb for beginners?", "complexity": "simple"},
+      {"q": "What's the biggest mistake people make when starting a budget?", "complexity": "moderate"},
+      {"q": "Should I pay off debt or save money first?", "complexity": "moderate"},
+      {"q": "I have irregular freelance income, high-interest credit card debt, and no emergency fund -- how would you prioritize between building savings and paying down debt given the income is unpredictable?", "complexity": "complex"},
+      {"q": "If half my expenses are unpredictable month to month, does a fixed budget even make sense for me, or should I be doing something else entirely?", "complexity": "complex"},
+      {"q": "How do I track my spending without a lot of effort?", "complexity": "simple"},
+      {"q": "How do I budget for irregular expenses like car repairs?", "complexity": "moderate"}
+    ]
+  },
+  {
+    "topic": "learning a musical instrument",
+    "questions": [
+      {"q": "What's an easy instrument for an adult beginner to start with?", "complexity": "simple"},
+      {"q": "How often should a beginner practice?", "complexity": "simple"},
+      {"q": "How do I stay motivated when progress feels slow?", "complexity": "moderate"},
+      {"q": "Should I learn to read sheet music or just play by ear first?", "complexity": "moderate"},
+      {"q": "I want to learn guitar specifically to eventually play in a band, but I also don't want to develop bad habits early on that I'd have to unlearn later -- how should that shape how I practice as a total beginner?", "complexity": "complex"},
+      {"q": "If I only have 15 minutes a day some days and an hour on others, how should I actually structure practice time to make the most of that inconsistency?", "complexity": "complex"},
+      {"q": "Do I need an expensive instrument to start?", "complexity": "simple"},
+      {"q": "How long does it typically take to play a first simple song?", "complexity": "moderate"}
+    ]
+  }
+]

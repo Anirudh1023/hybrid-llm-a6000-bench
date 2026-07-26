@@ -1,16 +1,54 @@
-# Hybrid LLM speculative decoding — A6000 benchmark
+# Hybrid LLM: cross-vocabulary speculative decoding as accelerator + handoff
 
-Extends the T4-based diagnostic session (2026-07-22/23) onto a 48GB A6000,
-specifically to run the experiments the T4's 2x15.6GB VRAM couldn't support:
-genuinely large drafter:target ratios (30B+ targets), a properly
-ratio-matched same-family vs cross-family comparison, isolated
+This repo is now the full project handoff, not just an A6000 benchmark
+extension — it contains the complete T4-session research (architecture,
+every bug found and fixed, every experiment run, the full script history)
+alongside the A6000-scale experiments this machine exists to run.
+
+**Start here, in this order:**
+1. **`PROJECT_README.md`** — the real project overview: architecture, the
+   end-to-end flow, the core mechanism, every bug found and fixed, every
+   experiment with exact numbers, the current verdict on what's proven vs
+   ruled out vs domain-gated, and the literature map. Read this first if
+   you're new to the project on this machine.
+2. **`SCRIPT_INDEX.md`** — a script-by-script map (with a flowchart) of
+   which script produced which result and when, cross-referenced to
+   `PROJECT_README.md`. Read this when you need to find "which script
+   produced that number" without re-reading the whole narrative.
+3. **`RESEARCH_LOG.md`** — the full, dated, append-only raw research log
+   `PROJECT_README.md` was written from. Ground truth for anything the
+   summary doesn't cover in enough detail.
+4. **`t4-session/`** — every script (47 total) and result artifact from
+   the T4-based work, organized by phase (see `SCRIPT_INDEX.md`).
+5. **This file + `CONCLUSIONS.md` + `experiments/`** — the A6000-specific
+   continuation: the experiments below, motivated directly by what the T4
+   session left open (see "What each experiment is FOR").
+
+---
+
+## Why this machine, what it's for
+
+Extends the T4-based diagnostic session (2026-07-22 through 07-26) onto a
+48GB A6000, specifically to run the experiments the T4's 2x15.6GB VRAM
+couldn't support: genuinely large drafter:target ratios (30B+ targets), a
+properly ratio-matched same-family vs cross-family comparison, isolated
 quantization-overhead measurement, and a corrected full reverse-KL pipeline
 that applies every fix found on the T4 in the right order.
 
-**Read `CONCLUSIONS.md` first** — it's the living summary of what's proven,
+The T4 session's standing verdict, which is what these experiments are
+actually trying to move past (full detail in `PROJECT_README.md` §6-7):
+> "The flagship direct-mapping + greedy-verification result (1.394x)
+> remains the only lever that has robustly helped on this specific
+> conversational deployment domain — every additional mechanism tried
+> (quantization, n-gram cache, PLD, online training in three
+> configurations, both adaptive-window approaches) has been null or
+> negative here, though several (online training, n-gram cache) are
+> confirmed real on other domains (GSM8K, repetitive/structured content)."
+
+**Read `CONCLUSIONS.md` next** — it's the living summary of what's proven,
 what's still open, and what each experiment here is meant to resolve. Update
 it as you go; it's meant to accumulate across sessions, not just describe
-tonight's T4 work.
+one machine's work.
 
 ## Setup
 
@@ -29,6 +67,15 @@ in the experiment scripts:
 ## Layout
 
 ```
+PROJECT_README.md    the real project overview — start here
+SCRIPT_INDEX.md       script-by-script map + flowchart of the whole project
+RESEARCH_LOG.md       full dated raw research log (source of PROJECT_README.md)
+
+t4-session/          everything from the T4-based work (see SCRIPT_INDEX.md)
+  scripts/             47 scripts, every experiment actually run so far
+  data/                prompt sets, datasets, reward logs used across scripts
+  results/             JSON results + small artifacts (acceptance-head checkpoints)
+
 src/                 reusable core (import from experiments/ scripts)
   harness.py          measure_baseline / measure_sd / run_full_comparison
   vocab_utils.py       config.vocab_size native-path check (see below — READ THIS)

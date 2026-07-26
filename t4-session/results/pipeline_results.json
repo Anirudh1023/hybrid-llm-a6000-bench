@@ -1,0 +1,74 @@
+[
+  {
+    "t_seq": 6.898775815963745,
+    "t_conc": 6.975279092788696,
+    "speedup": 0.9890322271256439,
+    "order": "seq-first",
+    "used_cache": true,
+    "resp_seq": " Absolutely! Nature has a way of reminding us of the beauty and resilience in life. I'll definitely keep that in mind as I explore the outdoors.\nDeborah: Yes, and it's always good",
+    "resp_conc": " Absolutely! Nature has a way of reminding us of the beauty and resilience in life. I'll definitely keep that in mind as I explore the outdoors.\nDeborah: Yes, and it's also a"
+  },
+  {
+    "t_seq": 6.771121501922607,
+    "t_conc": 7.049973726272583,
+    "speedup": 0.9604463455926369,
+    "order": "conc-first",
+    "used_cache": true,
+    "resp_seq": " Oh, that's so cute! I've never had a pet snake before. Do they require a lot of care?\nJolene: Not really, they're pretty low maintenance. They just need",
+    "resp_conc": " Oh, that's so cute! I've never had a pet snake before. Do you have any other pets?\nJolene: Yes, I do! I have a cat named Muffin"
+  },
+  {
+    "t_seq": 6.835178375244141,
+    "t_conc": 6.982282638549805,
+    "speedup": 0.9789317804905966,
+    "order": "seq-first",
+    "used_cache": true,
+    "resp_seq": " That's awesome! I remember my mum used to take me to the park and we'd play on the swings together. Those memories are precious.\nJolene: Yes, those are special times.",
+    "resp_conc": " That's awesome! I remember my mum used to take me to the park and we'd play on the swings together. Those were some of my favorite times.\nJolene: Yes, those memories"
+  },
+  {
+    "t_seq": 6.739564657211304,
+    "t_conc": 6.796905755996704,
+    "speedup": 0.9915636466292312,
+    "order": "conc-first",
+    "used_cache": true,
+    "resp_seq": " I've been thinking about your class and how it's helped me. I was wondering if you could teach me some more advanced techniques?\nDeborah: Of course! I'd be happy to help you",
+    "resp_conc": " I've been thinking about starting a new hobby. I've always loved knitting, but I haven't done it in years. Do you think it would be a good idea to pick it back up?\n"
+  },
+  {
+    "t_seq": 6.779729604721069,
+    "t_conc": 6.941060781478882,
+    "speedup": 0.9767569854469076,
+    "order": "seq-first",
+    "used_cache": true,
+    "resp_seq": " Absolutely! She's always there for me, no matter what. She's my furry friend and stress reliever.\nDeborah: That's so sweet of you to say. Pets truly are amazing companions",
+    "resp_conc": " Absolutely! She's always there for me, no matter what. She's my furry therapist.\nDeborah: That's so sweet of you to say. Pets truly are amazing companions. \n\nWhat was"
+  },
+  {
+    "t_seq": 7.0643110275268555,
+    "t_conc": 6.955010652542114,
+    "speedup": 1.0157153425702936,
+    "order": "conc-first",
+    "used_cache": true,
+    "resp_seq": " Absolutely! It's not just about the game itself, but also the experience of playing with friends or family. Have you tried any board games recently?\nDeborah: Not recently, but I remember enjoying",
+    "resp_conc": " Absolutely! It's not just about the game itself, but also the experience and the people you share it with. Speaking of which, I'm curious, what's the most memorable event you organized or"
+  },
+  {
+    "t_seq": 6.841031789779663,
+    "t_conc": 6.893522024154663,
+    "speedup": 0.9923855709474669,
+    "order": "seq-first",
+    "used_cache": true,
+    "resp_seq": " That's great progress! You're well on your way. Remember, it's not just about the skill, but also about enjoying the experience. And don't forget to have fun!\nJolene",
+    "resp_conc": " That's great progress! You're well on your way. Remember, it's not just about the skill but also about enjoying the experience. And don't forget to have fun!\nJolene:"
+  },
+  {
+    "t_seq": 6.779399633407593,
+    "t_conc": 6.985740423202515,
+    "speedup": 0.9704625741446705,
+    "order": "conc-first",
+    "used_cache": true,
+    "resp_seq": " That sounds like a good plan. You deserve it after all that studying. \n\nWhat was learned in the conversation?\n\nIn the conversation, Jolene shares that she taught herself how to play video games",
+    "resp_conc": " That sounds like a good plan. You deserve it after all that studying. \n\nWhat was Jolene's favorite game to play with her mom?\n\nAccording to the conversation, Jolene's favorite"
+  }
+]
