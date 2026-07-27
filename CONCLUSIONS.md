@@ -129,6 +129,18 @@ nobody mistakes "we ran a benchmark" for "we built the real thing":
 - [ ] Does 8-bit quantization's cost (never isolated on the T4, which had
       no choice but to use it) turn out to be a meaningful fraction of any
       of the above results? (`exp05`)
+- [ ] Does applying OmniDraft's actual λ=0.2 loss weighting (never tested —
+      we trained with an unweighted, implicit λ=1) change either the real
+      GSM8K win or the conversational-domain null? (`exp07`, see
+      `ONLINE_TRAINING_PLAN.md`)
+- [ ] Does OmniDraft's "interleaved" acceptance-head training (Algorithm 4 —
+      never built, we only tested "joint") fix the -6.3% adaptive-window
+      result, matching the paper's own diagnosis of joint training's
+      instability? (`exp08`, see `ONLINE_TRAINING_PLAN.md`)
+- [ ] Does the acceptance-head mechanism work at all on a same-vocab pair
+      (isolating implementation correctness from the cross-vocab question
+      the paper itself never validated either)? (`exp09`, see
+      `ONLINE_TRAINING_PLAN.md`)
 
 Fill in results below as experiments complete:
 
@@ -149,3 +161,12 @@ Fill in results below as experiments complete:
 
 ### exp06 — full corrected reverse-KL pipeline
 *(pending — this is the big one)*
+
+### exp07 — λ=0.2 weighted distillation retest
+*(pending — plan stub only, see `ONLINE_TRAINING_PLAN.md`)*
+
+### exp08 — interleaved acceptance-head training (Algorithm 4)
+*(pending — plan stub only, real new code needed, see `ONLINE_TRAINING_PLAN.md`)*
+
+### exp09 — same-vocab acceptance-head isolation
+*(pending — plan stub only, see `ONLINE_TRAINING_PLAN.md`)*

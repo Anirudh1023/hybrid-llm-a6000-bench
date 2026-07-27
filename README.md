@@ -20,7 +20,15 @@ alongside the A6000-scale experiments this machine exists to run.
    summary doesn't cover in enough detail.
 4. **`t4-session/`** — every script (47 total) and result artifact from
    the T4-based work, organized by phase (see `SCRIPT_INDEX.md`).
-5. **This file + `CONCLUSIONS.md` + `experiments/`** — the A6000-specific
+5. **`ONLINE_TRAINING_PLAN.md`** — a focused handoff plan for `exp07`-`exp09`,
+   written directly from a paper-reading session against the actual
+   OmniDraft text (not a summary): three specific implementation gaps
+   between our online-training build and the paper's exact recipe (an
+   untested λ=0.2 loss weighting, a never-built "interleaved" acceptance-
+   head training variant, and an unvalidated cross-vocab assumption the
+   paper's own authors never tested either), each with exact equations,
+   build steps, and success criteria. Read this before touching exp07-09.
+6. **This file + `CONCLUSIONS.md` + `experiments/`** — the A6000-specific
    continuation: the experiments below, motivated directly by what the T4
    session left open (see "What each experiment is FOR").
 
@@ -128,6 +136,12 @@ python report.py    # -> BENCHMARK_REPORT.md, all results consolidated + compare
 
 Or just: `python run_all.py --with-training` to run everything in order.
 
+**exp07-exp09 are plan stubs, not runnable yet** — see `ONLINE_TRAINING_PLAN.md`
+first. Each raises `NotImplementedError` with the exact build steps in its
+own docstring; they build on `t4-session/scripts/` (the real, complete
+online-training code), not `src/reverse_kl_train.py` (an earlier,
+intentionally incomplete predecessor — its own docstring says so).
+
 ## What each experiment is FOR (not just what it does)
 
 | Experiment | Question it answers | Why the T4 couldn't answer it |
@@ -138,8 +152,20 @@ Or just: `python run_all.py --with-training` to run everything in order.
 | exp04 | Is LoRA's ~44% per-step overhead specific to Qwen3-0.6B, or does it reproduce elsewhere? | Only ever measured on one drafter, one adapter config |
 | exp05 | How much does 8-bit quantization itself cost, in isolation? | T4 had no choice but 8-bit for anything past ~7B — never had a fp16 control |
 | exp06 | With every known fix applied (merge, fixed-length option, real target scale) — does reverse-KL training finally show a genuine wall-clock win? | The "ultimate" test — nothing this clean was possible on the T4 rig |
+| exp07 | Does OmniDraft's actual λ=0.2 loss weighting (never tested — we used an unweighted, implicit λ=1) change the GSM8K win or the conversational-domain null? | Found only by reading the paper's exact equations against our own code, not by running anything on the T4 |
+| exp08 | Does OmniDraft's "interleaved" acceptance-head training (never built — we only tested "joint") fix the -6.3% adaptive-window result? | Requires new buffer/training-cadence code, not built during the T4 session |
+| exp09 | Does the acceptance-head mechanism work at all on a same-vocab pair, isolating implementation correctness from an untested cross-vocab assumption? | The T4 session tested cross-vocab directly with no same-vocab control — the paper's own authors never validated this mechanism cross-vocab either |
 
 ## What's explicitly NOT in scope here (see CONCLUSIONS.md "still missing")
+
+**Update**: the note below was accurate when this repo was created
+(2026-07-23) but is now stale — OmniDraft's actual online n-gram cache and
+acceptance-prediction head WERE built, in `t4-session/scripts/` (see
+`SCRIPT_INDEX.md` phases 6-8). exp01-06 below are about the pre-that-work
+question (does the incomplete direct-mapping-only implementation reach a
+genuine wall-clock win at real scale); exp07-09 and `ONLINE_TRAINING_PLAN.md`
+are the direct continuation of the now-complete online-training work, not
+a return to something unbuilt.
 
 Building OmniDraft's actual online n-gram cache and acceptance-prediction
 head is a separate, larger engineering task — not something to squeeze into
