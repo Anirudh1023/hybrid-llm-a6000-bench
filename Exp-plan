@@ -1,0 +1,181 @@
+# ICASSP NPU Experiment Plan — Adaptive Subspace ZO on Hexagon NPU
+
+Written 2026-09-02, revised same day after properly reading
+`/home/anirudh/ARFWork/Adaptive_Subspace_FZOO/` (queue_logs_1-4, queue_logs_qwen,
+sweep_results.csv, README.md Sections 9/11/12 — the actual grid-search
+results, not just the handover docs). Scope: **only** Adaptive Subspace ZO
+(RS-FZOO / Adaptive-RS-FZOO on real weight matrices). Everything else
+(P-GAP/SubZero-on-LoRA, DL-FZOO, GRZO, Decoupled-FZOO) is out of scope — see
+`ALL-EXPERIMENTS-CATALOG.md` §10.3.
+
+## 1. The thesis (unchanged from the first pass, still correct)
+
+NPU is fast at prefill/batched-matmul, slow/impossible at anything that needs
+per-token sequential state → FZOO's batched-perturbation structure is a
+natural fit → doing that batching on real weight matrices directly overflows
+VTCM (confirmed: a real crash, catalog Bug #47) → subspace restriction is
+the *only* way to fine-tune real weights on this hardware, not an efficiency
+add-on → on-device SVD + adaptive-N + shared-threshold refresh make the
+subspace mechanism itself NPU-viable → hyperparameters come from GPU grid
+search because on-device search is infeasible.
+
+**What changes in this revision**: the GPU grid search is much larger and
+more conclusive than first represented, and it found a specific, large,
+previously-untested lever (`subspace_target=attn_all`) that should be the
+headline NPU experiment, not a footnote.
+
+## 2. What the grid search actually found (read directly from the source)
+
+### 2.1 OPT-2.7B sweep (24 runs, `queue_logs_1`-`4`, analyzed in `sweep_results.csv`)
+
+Baseline throughout: `lr=5e-5, eps=1e-3, floor_frac=0.1, target=mlp_down,
+rank=256`, 5000 steps → test acc 0.861, best dev 0.81.
+
+| Dimension swept | Result |
+|---|---|
+| `subspace_target` (`mlp_down` baseline vs `mlp_all` vs `attn_all`) | **By far the largest effect in the entire sweep.** `attn_all`: **0.933 test / 0.926 best-dev** (+7.2pp/+11.6pp over baseline) at 5000 steps — beats even a 20,000-step `mlp_down` run (0.929 test) at less than half the wall-clock/forward-pass cost. `mlp_all`: 0.912/0.884 (also helps, less than attn_all). |
+| `lr` (11 points, 1e-4 to 3e-2) | Clean inverted-U. **2e-4/3e-4 beat baseline** (best-dev 0.89/0.888 vs 0.81). Complete collapse to chance above ~4e-4 (1e-3+: dev crashes to 0.49-0.61). |
+| `zo_eps` (5 points, 1e-4 to 5e-2) | Monotonic: worse below baseline, **better at and above 1e-2** (dev 0.836-0.842 vs baseline's 0.81) — matches P-GAP's own published eps for this exact variant. |
+| `adaptive_floor_frac` (0.02-0.2) | **No meaningful effect** — flat within noise. Don't spend time on this knob. |
+| `subspace_rank` (128/256/512) | Monotonic with size: r128 worse (0.782 dev), r512 better (0.836 dev) than r256 baseline — as expected, more capacity helps. |
+
+**New failure mode found** (§12.3 of the README): at `lr≥1e-3`, divergence causes the
+adaptive-refresh trigger to fire on nearly every step (a "refresh-storm") — the model's
+instability looks like subspace staleness to the trigger, which can't tell the two apart.
+Worth watching for if we ever push LR up on NPU.
+
+**Not yet run even on GPU**: the obvious combination (`attn_all` + `lr=2e-4` + `eps=1e-2`
+together) — flagged in the README as the recommended next step, still open.
+
+### 2.2 Qwen3-0.6B sweep (12 runs, `queue_logs_qwen`) — our actual target model
+
+Redesigned mid-flight using the OPT sweep's evidence (README §11.6). Core grid:
+`lr∈{5e-5,1e-4,2e-4} × rank∈{8,32,64}`, `target=mlp_down`, `eps=1e-2` fixed,
+plus 3 transfer-check runs at rank=32.
+
+| Config | Test acc | Dev acc |
+|---|---|---|
+| lr=1e-4, mlp_down, r32 | 87.27% | 82.2% |
+| lr=1e-4, mlp_down, r64 | 86.93% | 82.6% |
+| lr=2e-4, mlp_down, r64 | 86.70% | **83.8%** |
+| **lr=5e-5, eps=1e-2, attn_all, r32** | **87.27%** | **84.8% — best of all 12** |
+| lr=2e-4, eps=1e-2, attn_all, r32 ("full OPT recipe") | 84.86% | 81.4% — *worse* than the conservative-LR attn_all run |
+| lr=5e-5, eps=1e-3, mlp_down, r32 (untuned control) | 84.75% | 81.4% |
+
+**Important cross-model difference**: on OPT, higher LR (2e-4) helped `attn_all`. On
+Qwen3, it made `attn_all` *worse* (81.4% vs 84.8% dev). **Do not assume OPT's LR finding
+transfers to Qwen3 — the current best-known Qwen3 config keeps the conservative lr=5e-5,
+only widens the target and raises eps.**
+
+**Current best-known Qwen3-0.6B config**:
+```
+lr=5e-5  eps=1e-2  target=attn_all  rank=32
+Adaptive-N: min_N=4 max_N=16 step_N=4 calibration_steps=100 calibration_N=16
+            tau=0.35 floor_frac=0.1 (unchanged, confirmed not sensitive)
+```
+This is **not yet been run past 5000 steps** and **rank=64 attn_all has never been tried**
+on either GPU or NPU — both are open, cheap follow-ups if there's time after the must-have
+list below.
+
+## 3. Revised NPU experiment matrix, priority order
+
+### #1 (NEW, MUST-HAVE, likely the new headline result): `attn_all` on real NPU hardware
+
+Run Adaptive-RS-FZOO with `ZO_RSFZOO_TARGET=attn_q,attn_k,attn_v,attn_o` (llama.cpp's
+tensor-name substrings for q/k/v/o projections — matches `attn_all`'s semantics),
+`lr=5e-5, eps=1e-2, rank=32`, same Adaptive-N schedule as everything else, SST2, matched
+step budget to our existing best `ffn_down` NPU result (10k steps) for a clean comparison.
+
+**No new engineering needed** — `get_realweight_targets()` already supports
+comma-separated substrings (confirmed in `zo-common.h`), and `ZO_RSFZOO_TARGET`/`ZO_EPS`
+are already env-var-overridable. This is a config/launch change only.
+
+**One real unknown to check before committing device-hours**: the subspace-refresh
+accumulator is one **full-size** (m×n, fp32) buffer per target *tensor*, held transiently
+during refresh — independent of rank r. `attn_all` targets 4 tensors/layer (q/k/v/o) vs
+`ffn_down`'s 1/layer, so refresh-time transient memory is roughly 4x higher than what's
+already been validated on NPU. Qwen3's attention matrices are much smaller than its FFN
+matrices, so this is *plausibly* fine, but VTCM is far tighter than GPU memory (that's the
+whole reason subspace restriction exists at all, §1) — **run a short smoke test (20-50
+steps, watch for the exact kernel-panic signature from Bug #47) before launching a long
+run.**
+
+### #2 (must-have): Accuracy-parity table at the *existing* `ffn_down` config
+
+LoRA-adapter full-rank FZOO vs RS-FZOO (fixed N=8) vs Adaptive-RS-FZOO, all r=256,
+lr=5e-5/eps=1e-3 (the config already validated on NPU), matched steps (10k), NPU v81
+unrestricted. Mostly have this already (92.67%/86.67%/92.00% at 5k for two of three arms) —
+just needs 1-2 fill-in runs to align step counts. Keep this as the "before" reference
+that #1 either matches or beats.
+
+### #3 (must-have): Clean rank sweep for the CPU/NPU crossover figure
+
+r∈{8,32,64,128,256}, **fixed N=8** (not adaptive), short budget (200-300 steps), both CPU
+and NPU-v81-unrestricted. Keep this on `ffn_down` (not `attn_all`) — it's a systems/
+throughput measurement, or continuity with existing partial data, and `attn_all` at 4x the
+target-matrix count would confound the timing curve with a different problem's memory
+footprint. Only 2-3 confounded points exist today (adaptive vs fixed N mixed across
+device generations) — this is still the single highest-value systems gap.
+
+### #4 (must-have): Adaptive-vs-fixed-N systems comparison, matched device class
+
+Same rank (r=256), same device class (v81 unrestricted) for both arms, full step budget.
+Existing fixed-N=8 r=256 result is on v79/NHVX=1 — a different device class than the
+adaptive r=256 result (v81) — add one matching fixed-N=8 arm on v81.
+
+### #5 (should-have): RTE at a GPU-matched budget
+
+~4444 steps / ~9 fwd-passes/step, matching the teammate's own RTE reference run, instead
+of the SST2-tuned 10k-adaptive convention. Lets you cite the real GPU RTE number (66.8%/
+68.6%) on equal footing.
+
+### #6 (nice-to-have, only if #1-5 land early): `attn_all` at rank=64
+
+Genuinely untested anywhere (GPU or NPU) — a cheap extra data point once #1 is validated.
+
+### #7 (nice-to-have): the "full OPT recipe" combo on NPU
+
+`attn_all + lr=2e-4 + eps=1e-2` — not yet run even on GPU (README §12.4's own recommended
+next step). Only worth NPU time if GPU confirms it first; per §2.2, this combo already
+looks *worse* than the conservative config on Qwen3, so don't prioritize this over #1.
+
+**Cut for time**: COPA (15% of budget, near-chance accuracy — not worth a device-day
+before Sept 16).
+
+## 4. Frozen configs — the two to actually deploy, don't re-sweep on-device
+
+```
+Config A (existing, validated, "before" reference):
+  lr=5e-5  eps=1e-3  target=ffn_down  rank=256
+  Adaptive-N: min_N=4 max_N=16 step_N=4 cal_steps=100 cal_N=16 tau=0.35 floor_frac=0.1
+
+Config B (new, grid-search-best for Qwen3-0.6B, THE experiment to prioritize):
+  lr=5e-5  eps=1e-2  target=attn_q,attn_k,attn_v,attn_o  rank=32
+  Adaptive-N: unchanged from Config A (floor_frac confirmed insensitive in the sweep)
+```
+No on-device hyperparameter re-tuning for either — both come directly from the GPU grid
+search. If #1 (Config B) underperforms on NPU relative to its GPU number, that's a result
+to report (possible NPU-specific quantization/precision effect on attention tensors,
+worth a sentence in the paper), not a cue to start tuning on-device.
+
+## 5. Operational protocol (unchanged, still the right lessons)
+
+1. Keep devices on charge for any run over ~2 hours.
+2. Pull `/data/local/tmp/fzoo/*.log` directly at the end of every run — don't trust the
+   monitor script's last adb-poll snapshot.
+3. No hyperparameter re-tuning on-device, ever, for this plan.
+4. Tag every run's filename/log with exact device+arch+NHVX setting.
+5. **New, from this revision**: smoke-test any new `subspace_target` (i.e. #1, attn_all)
+   at 20-50 steps before committing a long run — the VTCM-transient-memory risk is real
+   and untested at this target, unlike every rank/lr/eps change which only affects
+   already-validated tensors.
+
+## 6. Paper-writing implication (updated)
+
+The `attn_all` finding, if it holds on NPU, is a strong candidate for the headline
+accuracy number in the paper — potentially pushing real on-device accuracy well above
+the current ~92% `ffn_down` ceiling, using less compute than `ffn_down` needed. Frame it
+as: "restricting the subspace to attention projections, not FFN, both fits comfortably
+in VTCM and reaches significantly higher accuracy at lower cost than the FFN-restricted
+config used throughout prior on-device work" — a genuine, non-obvious empirical finding
+inherited from the GPU grid search and confirmed (pending #1's run) on real hardware.
