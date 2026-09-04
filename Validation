@@ -1,0 +1,364 @@
+Exactly. **That is the direction I would push the paper.**
+
+Right now, some parts of your method could be ported to another accelerator with relatively little conceptual change. For a really strong MLSys story, you want something where a reviewer can say:
+
+> “This algorithm exists because of the execution model of Qualcomm Hexagon.”
+
+Not merely:
+
+> “They happened to run ZO on a Hexagon NPU.”
+
+The strongest ideas are therefore things exploiting **Hexagon-specific constraints and primitives**: VTCM capacity, HMX/HVX execution, DMA/scratchpad behavior, quantized tensor layouts, dispatch granularity, synchronization costs, and the fact that you are feeding an inference-oriented runtime an optimization workload.
+
+### The most interesting direction: make the optimization space itself Hexagon-native
+
+Your current subspace idea is already close.
+
+Instead of asking:
+
+> “What low-rank subspace gives good optimization?”
+
+ask:
+
+> **“What parameterization can be represented inside the data movement and tensor formats that Hexagon already executes efficiently?”**
+
+That leads to several much more hardware-specific possibilities.
+
+### 1. VTCM-constrained perturbation staging
+
+Your 3.2 GB crash is actually a huge clue.
+
+Hexagon has a **small, explicitly managed local memory/scratchpad hierarchy**, so the natural question is:
+
+$$
+\text{How much perturbation state can actually coexist in VTCM?}
+$$
+
+Rather than merely saying “full rank is too large,” derive a **VTCM-aware maximum perturbation rank**:
+
+$$
+r_{\max}
+=
+f(B_{\text{VTCM}}, N, d, \text{dtype}, \text{number of slots})
+$$
+
+Then make the runtime choose
+
+$$
+r \le r_{\max}.
+$$
+
+Now rank isn't just an ML hyperparameter.
+
+It becomes a **hardware resource allocation parameter**.
+
+Even better, you could dynamically choose \(r\) based on the target layer's tensor dimensions and available VTCM.
+
+That is extremely Hexagon-specific.
+
+---
+
+### 2. VTCM-resident coefficient cache + streamed basis
+
+This is something I'd investigate seriously.
+
+Your current perturbation is roughly:
+
+$$
+\Delta W = U_r Z V_r^\top.
+$$
+
+You don't necessarily want all of \(U_r,V_r,Z\) at every stage.
+
+Could you keep the tiny \(Z\) / coefficient representation resident in VTCM and stream only the basis pieces needed for the HMX operation?
+
+That turns the subspace representation into a **memory-hierarchy-aware representation**.
+
+Then you can measure:
+
+$$
+\text{DRAM traffic}
+\rightarrow
+\text{VTCM traffic}
+\rightarrow
+\text{HMX compute}.
+$$
+
+That would be much more compelling than just "we fused kernels."
+
+---
+
+### 3. Exploit HMX's preferred matrix shapes
+
+This is the direction I'd be most excited about.
+
+Don't choose \(r\) solely based on optimization quality.
+
+Choose \(r\) based on **Hexagon HMX tile/packing constraints**.
+
+Suppose the hardware has preferred matrix dimensions. Then ranks such as 64, 128, 256 may map substantially better than arbitrary ranks.
+
+You could formulate:
+
+$$
+r^*
+=
+\arg\min_r
+\frac{T_{\text{HMX}}(r)+T_{\text{dispatch}}(r)}
+{\text{optimization progress}(r)}.
+$$
+
+Then your rank isn't merely:
+
+> low rank = less computation.
+
+It becomes:
+
+> **rank is quantized by the accelerator's preferred execution shapes.**
+
+That is unmistakably hardware/software co-design.
+
+---
+
+### 4. Hexagon-specific dispatch amortization
+
+You already have the beginnings of this with the \(r=8\) vs \(r=256\) crossover.
+
+Push it harder.
+
+Measure:
+
+$$
+T(r,N)=T_{\text{dispatch}}(N)+T_{\text{compute}}(r,N)
+$$
+
+and discover the point where HMX becomes worthwhile.
+
+Then have the runtime choose:
+
+$$
+\text{CPU if }T_{\text{CPU}} < T_{\text{NPU}},
+$$
+
+otherwise NPU.
+
+That's a **heterogeneous optimizer runtime**, not just an NPU implementation.
+
+The really nice experiment would be:
+
+> same training algorithm, same model, same rank, but automatically switching CPU/NPU based on rank and current workload.
+
+Then the system itself learns the hardware operating point.
+
+That could become one of the paper's strongest contributions.
+
+---
+
+### 5. NPU-native subspace refresh exploiting batched HMX
+
+Your current block-power iteration is already excellent for this.
+
+But I would frame it even more strongly:
+
+The algorithm naturally wants repeated matrix-vector operations:
+
+$$
+Wv_i
+$$
+
+but Hexagon wants matrix-matrix operations.
+
+So you transform
+
+$$
+W[v_1,\ldots,v_r]
+$$
+
+into one batched matrix multiplication.
+
+That is a classic **algorithm-to-hardware transformation**.
+
+And unlike activation-guided PCA, this is deeply tied to the hardware execution model.
+
+You could potentially generalize this:
+
+> **Any operation in the ZO optimizer whose mathematical form is GEMV is batch-transformed into GEMM to match HMX.**
+
+That gives you a reusable systems principle.
+
+---
+
+### 6. Quantization-scale mutation — but make it Hexagon-specific
+
+This is where your second idea becomes really interesting.
+
+Don't pitch it as:
+
+> "We optimize quantization scales."
+
+Pitch it as:
+
+> **"We exploit the fact that Hexagon's quantized execution path already consumes scale metadata, allowing optimization to modify metadata rather than the packed weight payload."**
+
+Now the contribution is fundamentally about the **representation consumed by the NPU**.
+
+Your packed 4-bit codes remain immutable:
+
+$$
+Q_b = \text{constant}.
+$$
+
+Only:
+
+$$
+s_b
+$$
+
+moves.
+
+That potentially means:
+
+$$
+\text{huge weight tensor}
+\quad\text{stays resident}
+$$
+
+while only tiny metadata moves through the update path.
+
+If the actual Qualcomm kernel path lets you do this without invalidating packing/caching assumptions, **this is much more Hexagon-specific than generic low-rank ZO.**
+
+And critically, you can compare:
+
+| Approach                | Weight traffic | VTCM footprint |  NPU kernel changes | Trainable DOF |
+| ----------------------- | -------------: | -------------: | ------------------: | ------------: |
+| Full real-weight ZO     |           huge |           huge |               major |          huge |
+| Low-rank real-weight ZO |       moderate |          small |            moderate |       \(r^2\) |
+| Scale-only ZO           |           tiny |           tiny | potentially minimal | #scale blocks |
+
+That would make a fantastic systems figure.
+
+---
+
+## Something even more Hexagon-specific: exploit the runtime's quantized dequantization path
+
+I'd investigate whether you can construct the perturbation **before or inside the dequantization stage**, rather than producing a separate perturbed weight tensor.
+
+Conceptually:
+
+$$
+W = sQ
+$$
+
+and perturb:
+
+$$
+W'=(s+\delta s)Q.
+$$
+
+If the kernel already does something equivalent to
+
+$$
+Q \rightarrow \text{scale} \rightarrow \text{HMX multiply},
+$$
+
+then your optimizer can modify the scalar metadata feeding that path.
+
+That is much more interesting than adding another standalone optimizer kernel.
+
+The ideal systems story becomes:
+
+> **We do not modify the inference engine to support training; we reinterpret existing quantized inference metadata as the trainable state.**
+
+That is *very* MLSys.
+
+---
+
+# And there is another Hexagon-specific axis I'd explore
+
+### DMA/transfer overlap
+
+A mobile NPU isn't just compute.
+
+You have:
+
+**host memory ↔ VTCM ↔ accelerator compute.**
+
+Could you overlap:
+
+$$
+\text{next perturbation transfer}
+$$
+
+with
+
+$$
+\text{current HMX computation}?
+$$
+
+For a ZO workload with many directions, this is naturally pipelinable.
+
+For example:
+
+$$
+\boxed{\text{DMA}_i}
+\rightarrow
+\boxed{\text{HMX}_i}
+\rightarrow
+\boxed{\text{DMA}_{i+1}}
+\rightarrow
+\boxed{\text{HMX}_{i+1}}
+$$
+
+rather than:
+
+$$
+\text{DMA}_i \rightarrow \text{HMX}_i \rightarrow \text{DMA}_{i+1}.
+$$
+
+If you can demonstrate meaningful overlap on the real Hexagon stack, **that is pure systems contribution** and extremely difficult to dismiss as generic ML optimization.
+
+---
+
+# So I'd reshape the paper around this
+
+Your central thesis could become:
+
+> **ZO fine-tuning has to be reformulated around the execution and memory model of an inference-only mobile NPU.**
+
+Then your three contributions become:
+
+**1. Execution representation**
+
+Real-weight ZO is converted into a tiny coefficient-space representation because full dispatch violates the accelerator's operand/resource limits.
+
+**2. Hardware-shaped optimization**
+
+Rank is chosen around Hexagon's dispatch and HMX/VTCM characteristics, producing a CPU/NPU crossover and potentially an automatic backend selector.
+
+**3. Hardware-native adaptation**
+
+Subspace refresh is transformed from sequential GEMV/deflation into batched HMX-friendly operations, and potentially quantized-scale mutation keeps the packed weight representation immutable.
+
+That is substantially stronger than:
+
+> "We applied P-GAP + FZOO to Qwen on an NPU."
+
+---
+
+### Of the ideas you've mentioned, my priority would be
+
+**#1 VTCM/resource-aware rank + automatic CPU/NPU selection**
+
+**#2 HMX-shaped block-power refresh**
+
+**#3 quantization-scale mutation inside the existing quantized execution path**
+
+**#4 activation-guided subspace**
+
+The reason I put activation guidance last isn't that it is bad. It's that **you could move the same algorithm to an NVIDIA GPU and still make the same argument.**
+
+Your goal should be almost the opposite:
+
+> **Remove Hexagon, and the contribution should stop making sense.**
+
+That's the litmus test I'd use for every new idea you add to this paper.
