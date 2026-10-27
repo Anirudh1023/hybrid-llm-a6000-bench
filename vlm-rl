@@ -1,0 +1,674 @@
+# Rollout-Aware KV-Cache Efficiency for High-Resolution VLM Reinforcement Learning
+
+> **Project brief for the research engineer / coding agent**  
+> **Primary goal:** reduce redundant visual-prompt computation during repeated VLM rollouts by improving reuse, retention, and scheduling of cache state under tight GPU-memory budgets.  
+> **Initial scope:** systems-only. Do not change the model architecture, train a new router/RPN, or change the RL objective until the existing execution path has been profiled and a cache optimization has been demonstrated.
+
+This README is intended to be the complete handoff. The agent working from the repository may not have access to the original 60-slide project deck or prior discussion. The relevant project context, measurements, open questions, links, and proposed workflow are captured below.
+
+---
+
+## 1. Executive summary
+
+We are working on efficient inference and reinforcement-learning (RL) post-training for a high-resolution vision-language model (VLM), based on **Qwen2.5-VL-7B-Instruct**. The project uses a zooming workflow: the model first processes an image and question, identifies a region of interest, then receives a crop (or crops) for closer inspection and answers. An RPN (region-proposal network/head) can propose regions from the model's hidden state; in the latest project variant, the RPN is fixed/supervised and the reader VLM is RL-trained.
+
+The systems problem is **repeated processing of long visual prompts across multiple rollouts**. During GRPO-style RL, the same image/question can generate multiple candidate trajectories. These trajectories may share an image-and-question prefix, but the system can recompute the same visual work if cache state is not reused or if relevant cache blocks have been evicted under memory pressure.
+
+The core hypothesis to investigate is:
+
+> A rollout-aware cache-management and scheduling strategy can reduce repeated multimodal prefill work and/or vision-encoder work, improving end-to-end rollout throughput and RL-step time under a fixed GPU-memory budget, while preserving model outputs and task reward.
+
+Do **not** assume this hypothesis is already proved, nor that a custom eviction policy is automatically needed. Current vLLM already has automatic prefix caching, a separate multimodal encoder-output cache, KV-cache offloading facilities, and configurable eviction policies for the offloading tier. The first task is to reproduce the observed behavior on the repository's actual software version, profile it, and determine what remains unsolved by existing mechanisms.
+
+### What success looks like
+
+1. A reproducible baseline showing how much visual-prefix computation is reused or repeated during rollouts.
+2. A clear distinction between misses/evictions in the language-model KV cache and misses/evictions in the multimodal encoder-output cache.
+3. A measured bottleneck and a hypothesis grounded in traces, counters, and experiments.
+4. A minimal systems change or configuration/scheduling strategy that improves the target metrics versus current vLLM and relevant offloading baselines.
+5. Evidence that the optimization does not change outputs because of stale or incorrectly reused cache state.
+6. A controlled end-to-end RL validation after the systems-only results are established.
+
+---
+
+## 2. Project context and terminology
+
+### 2.1 Model and task
+
+- **Reader:** Qwen2.5-VL-7B-Instruct.
+- **Model type:** autoregressive VLM, not a diffusion model.
+- **Use case:** answer questions about high-resolution images, sometimes using a zoom/crop tool.
+- **Initial model/runtime setup shown in the project deck:** BF16, FlashAttention-2, Hugging Face Transformers 4.51.3; experiments reported on one NVIDIA A100-40GB. These are historical experiment settings, not a mandate for the current checkout. Record the actual runtime, commit, GPU, CUDA and model configuration before benchmarking.
+- **RL:** GRPO is used in the project's zooming/post-training experiments. The reader is updated; the RPN in the latest design is supervised and fixed during reader RL.
+- **Initial systems priority:** exploit the existing zooming method and inference runtime to reduce repeated work, without requiring new RL training. After that works, validate in the full RL loop.
+
+### 2.2 Zooming workflow
+
+The project has evolved through several variants. Do not mix their numbers or assumptions:
+
+1. **Point-then-Zoom inference prototype:** a low-resolution glimpse is processed first; a small learned head scores the image-token hidden states; high-scoring connected regions are cropped from the original image and passed to the reader at higher detail. The glimpse's prefix KV state may be reused when the crop is added.
+2. **DeepEyes-style zooming RL:** the model generates a thought/tool call, a crop is appended to the interaction, and the model continues. Each rollout can use different crops and a different generated thought, but multiple rollouts of the same initial question may share an initial image/question prefix.
+3. **Latest RPN variant in the deck:** the reader thinks, closes `</think>`, and an RPN maps the end-of-thought hidden state to image regions. Crops are returned to the reader. The reader is trained with GRPO; the RPN remains fixed after supervised training. This differs from asking the reader to emit exact bounding-box coordinates as text.
+
+**Immediate cache work should target the actual implementation in the checked-out repository.** First identify whether the active path is the DeepEyes box-tool path, the RPN path, or both. The early caching result in the deck used the DeepEyes-style rollout workload; it is evidence of the type of problem to investigate, not proof that the exact same behavior persists unchanged in the current RPN code or current vLLM version.
+
+### 2.3 Two distinct cache types — do not conflate them
+
+#### A. Language-model KV cache / prefix cache
+
+During language-model prefill, each decoder layer computes attention keys and values for prompt tokens. vLLM stores these in fixed-size KV-cache blocks. If a later request has an identical compatible prefix and the corresponding blocks remain available, the model can reuse these KV blocks instead of recomputing the decoder prefill for that prefix.
+
+A visual prompt is represented to the language model using image-derived visual tokens/features as part of the model's multimodal sequence. Reusing the **decoder KV cache** for that prefix can save substantial language-model work even if the image was already encoded by the vision tower.
+
+When the relevant decoder KV blocks are not present in GPU cache (and not found in an enabled offload/cache tier), the language-model must recompute the missing prefix prefill. This does **not necessarily** mean the vision encoder must run again.
+
+#### B. Multimodal encoder-output cache
+
+Separately, the runtime may cache outputs produced by the vision encoder (e.g., image embeddings). If an identical compatible image input is encountered and its encoder output is still cached, vision encoding can be avoided. If that cache misses or evicts the item, the encoder may need to run again.
+
+A request can therefore have:
+
+- an encoder-cache hit but a decoder KV-prefix miss: skip vision encoding, but recompute the LLM prefill over the visual/prompt tokens;
+- an encoder-cache miss and a decoder KV-prefix miss: potentially recompute both encoder output and decoder prefill;
+- a decoder KV-prefix hit: reuse compatible prefix KV state, subject to the exact token/image-hash/model-version conditions;
+- partial reuse: reuse the longest compatible prefix, then compute the uncached suffix.
+
+Instrument both systems separately. A single generic “cache hit” metric is insufficient.
+
+### 2.4 Memory terminology
+
+The slides sometimes use “SRAM” colloquially to mean the GPU cache filling up. For the A100-40GB setup, KV blocks and encoder outputs reside in GPU memory (typically described as GPU VRAM/HBM), not on-chip SRAM. Use **GPU memory**, **GPU KV-cache capacity**, **KV blocks**, and **encoder-cache budget** in code/docs unless specifically discussing on-chip SRAM.
+
+---
+
+## 3. Findings captured from the project deck
+
+These results are preliminary project observations, not peer-reviewed claims. Some were single runs or short pilots. Reproduce them before relying on them.
+
+### 3.1 High-resolution prompt cost
+
+- A 4K image was described as producing roughly 15,000 visual tokens and taking about 2.5 seconds per question with Qwen2.5-VL-7B on an A100 in the full-resolution path.
+- Most questions need only a small region, motivating a glimpse-plus-crop method.
+- In the Point-then-Zoom inference evaluation, HR-Bench 4K was reported at approximately 72.5% vs 71.5% full-image accuracy, 3,037 vs 14,972 tokens, and 596 ms vs 2,542 ms GPU time per question. HR-Bench 8K was reported at 68.0% vs 67.6%, approximately 4.1x faster. These are inference-method results and should not be treated as the cache optimization's expected gains.
+
+### 3.2 Crucial caching observation (deck slide 40)
+
+In the tested vLLM setup, the project observed:
+
+- Eight copies/samples of one request scheduled in the same step did **not** share the image/prompt prefill as expected; each copy re-read the image.
+- The workaround was a one-token **prewarm request** first. The request filled the prefix cache; the subsequent eight rollouts could hit the cached prefix.
+- Scheduling about 16 question groups in waves worked better than keeping approximately 50 groups in flight simultaneously; the larger in-flight set caused KV-cache thrashing.
+- Increasing the vision encoder's cache budget to 131k (as reported in the deck) improved questions/second by 33% in that setup.
+
+Treat these as reproduction targets. The prewarm behavior may depend on vLLM version, request construction, cache configuration, scheduling order, prompt/tokenization details, block alignment, and the exact way rollouts are issued. **Verify the present-day implementation before assuming a prewarm is still required.** The “131k” figure is the historical slide's encoder-cache budget setting; inspect the corresponding version/config before interpreting its exact units or copying the value.
+
+### 3.3 Preliminary RL cost comparison (deck slide 43)
+
+A short early pilot using Qwen2.5-VL-7B + LoRA, on one A100-40GB, compared full-image rollouts to glimpse-plus-crop rollouts:
+
+| Metric | Full image | Glimpse + crop | Reported ratio |
+|---|---:|---:|---:|
+| One RL step with 128 tries | 259 s | 33 s | 7.9x faster |
+| GPU-seconds per rollout | 0.426 | 0.077 | 5.5x lower |
+| GPU-seconds per trained sequence | 7.13 | 0.93 | 7.7x lower |
+| Tokens per trained sequence | 14,664 | 1,948 | 7.5x fewer |
+| Image tokens per rollout | 14,026 | 1,992 | 7.0x fewer |
+| Peak GPU memory | 26.8 GB | 19.1 GB | 1.4x lower |
+
+Important caveats stated in the deck: only early steps 1–8 were measured; reward was near-untrained and differed between conditions (0.33 full image vs 0.28 glimpse/crop); the result is not a controlled mature-policy quality comparison. Do not use these numbers as an acceptance target for the proposed cache work.
+
+### 3.4 Current research direction from the deck's final slides
+
+The final next steps explicitly call for:
+
+- making the RPN work with regular images / a VisionThink-style interaction;
+- investigating systems work that makes RL training more efficient, especially rollout generation cost and repeated processing of long visual prompts;
+- analyzing how to reuse visual tokens and KV state rather than recomputing them;
+- first prototyping the visual-token reuse path in Hugging Face Transformers, then moving the implementation into vLLM once the idea is understood;
+- improving performance without a large accuracy drop.
+
+For the present task, focus on cache efficiency and repeated prompt computation. Do not get distracted by jointly training the RPN and reader or redesigning the reward function unless profiling indicates that is necessary.
+
+---
+
+## 4. Precise problem statement
+
+During RL, one question/image can produce `G` rollout trajectories. All trajectories begin with the same image and question, but diverge after sampling different text, thoughts, tool actions, or crop choices. The shared initial prefix can be expensive because it contains many visual tokens.
+
+The GPU KV cache is finite. As active requests and completed prefixes compete for capacity, the cache manager may evict reusable blocks. Later, a rollout that needs an evicted prefix must recompute it unless the prefix is available through another cache tier. If the runtime also evicts the corresponding vision-encoder output, that work may be repeated too. This repeated work wastes GPU time and can lower the number of questions/rollouts processed per second.
+
+The high-level objective is:
+
+> **Given a fixed GPU-memory budget and an RL rollout workload with repeated multimodal prefixes, maximize useful reuse of expensive prefix state while controlling memory occupancy, transfer overhead, latency, fairness, and correctness.**
+
+This is a workload-aware cache-management and/or scheduling problem. A successful approach may be a scheduler/configuration change, a cache retention or admission strategy, a CPU offload policy, a better request grouping order, or a combination. We have not preselected the method.
+
+### Non-goals for the first phase
+
+- Do not invent a new VLM architecture.
+- Do not train a new RPN or change the current RPN's parameters.
+- Do not modify GRPO/PPO math, reward terms, advantage calculations, or rollout policy.
+- Do not start by rewriting DeepSpeed/FSDP, distributed collectives, or model-parallel kernels.
+- Do not assume a custom LRU replacement is needed before measuring the existing LRU, prefix cache, encoder cache, and offload tier.
+- Do not optimize only a synthetic text-only prompt and assume that represents high-resolution multimodal behavior.
+
+---
+
+## 5. Required initial repository reconnaissance
+
+Before proposing a patch, inspect the actual checkout and produce a concise repository map. The current main-branch links below are study aids; the user's checkout may be pinned to an older release or fork. Follow the **checked-out code**, not blindly the latest documentation.
+
+### 5.1 Establish environment and version
+
+Record:
+
+- git remote, branch, commit hash, uncommitted changes;
+- vLLM version and commit if editable/source installed;
+- Transformers, PyTorch, CUDA, driver, GPU model and GPU memory;
+- Qwen2.5-VL checkpoint and model dtype;
+- RL framework (e.g., verl/TRL or custom), its commit, and how vLLM is launched;
+- prefix caching enabled/disabled and default cache/block configuration;
+- encoder-cache budget / config and how the value is interpreted in this version;
+- whether rollout inference and policy training share GPUs or use separate workers;
+- how new policy weights are loaded into the rollout engine and whether caches are reset.
+
+Do not post secrets, private dataset paths, credentials, customer data, or internal endpoints in logs or this README.
+
+### 5.2 Map the code path end-to-end
+
+Trace one rollout from user image/question to generated answer:
+
+1. Dataset/input loader and image preprocessing.
+2. Qwen2.5-VL multimodal processor and image/video token construction.
+3. Vision encoder forward and encoder-output cache lookup/store.
+4. Construction of the decoder prompt/prefix and multimodal hashes/identifiers.
+5. KV-cache lookup, block allocation, reference counts, block append/free, and eviction.
+6. Scheduler decisions about which requests are admitted and run in each engine step.
+7. Rollout sampler / GRPO driver and how `G` copies per question are generated.
+8. Tool/RPN execution and how the crop is appended to the conversation.
+9. Cache behavior when the next turn or next rollout starts.
+10. Weight update and any cache invalidation/reset between RL policy versions.
+
+For every stage, record file path, class/function, input/output, relevant configuration, and metrics currently exposed. Prefer links with line numbers/commit hashes in the code review notes so another engineer can reproduce the trace.
+
+### 5.3 Current vLLM entry points worth inspecting
+
+These are likely useful in a current vLLM V1 checkout. Verify paths/signatures against the selected commit; do not assume all are present in older vLLM versions.
+
+- [Automatic prefix caching design](https://github.com/vllm-project/vllm/blob/main/docs/design/prefix_caching.md) — cache keying, multimodal hashes, block allocation/free/eviction and reference counts.
+- [`KVCacheManager` implementation](https://github.com/vllm-project/vllm/blob/main/vllm/v1/core/kv_cache_manager.py) — decoder KV block lookup/allocation and lifecycle; follow any imports/helpers used by the checked-out version.
+- [`EncoderCacheManager` implementation](https://github.com/vllm-project/vllm/blob/main/vllm/v1/core/encoder_cache_manager.py) — separate multimodal encoder-output caching and eviction.
+- [Scheduler implementation](https://github.com/vllm-project/vllm/blob/main/vllm/v1/core/sched/scheduler.py) — request admission, scheduling, encoder budget, prefill and decode coordination.
+- [GPU model runner](https://github.com/vllm-project/vllm/blob/main/vllm/v1/worker/gpu_model_runner.py) — model execution and encoder-cache reset behavior. In current code, explicitly inspect the path that clears encoder cache on model-weight updates.
+- [vLLM prefix caching feature docs](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching.html) and [design doc](https://docs.vllm.ai/en/latest/design/automatic_prefix_caching.html).
+- [vLLM KV offloading usage](https://github.com/vllm-project/vllm/blob/main/docs/features/kv_offloading_usage.md) — current `OffloadingConnector`, CPU tiering, selective load/offload, and configurable eviction policy details.
+- [vLLM metrics docs](https://docs.vllm.ai/en/latest/usage/metrics/) — inspect the current version's supported metrics; add narrow instrumentation where existing metrics cannot distinguish the relevant events.
+
+### 5.4 Model and workload references
+
+- [Qwen2.5-VL model documentation](https://github.com/huggingface/transformers/blob/main/docs/source/en/model_doc/qwen2_5_vl.md) — vision encoder, dynamic resolution, video behavior, MRoPE and model-specific processor details.
+- [Hugging Face Transformers repository](https://github.com/huggingface/transformers) — use this for a minimal eager/HF implementation before making vLLM changes, consistent with the historical project plan.
+- [DeepEyes repository](https://github.com/Visual-Agent/DeepEyes) — reference zooming/tool-use RL workload. Inspect its current scripts and versions; do not assume its latest branch exactly matches the version used for the project's initial cache experiment.
+- [Vision-RL² repository](https://github.com/YuHengsss/VisionRL2) — relevant RPN/region-level RL work and comparison point. Its current code may have evolved since the older deck.
+- [verl repository](https://github.com/volcengine/verl) — RL orchestration, rollout workers, training backend, and integration context if this is the framework actually used in the checkout.
+
+### 5.5 Existing cache/offload systems to use as baselines
+
+- [LMCache repository](https://github.com/lmcache/lmcache) and [quickstart](https://docs.lmcache.ai/getting_started/quickstart.html) — an external KV-cache layer, including reuse/offload possibilities. Verify its current compatibility with the selected vLLM and Qwen2.5-VL versions before investing in integration.
+- [vLLM KV offloading guide](https://docs.vllm.ai/en/latest/features/kv_offloading_usage.html) — the current docs describe offloading completed KV blocks to a CPU tier (and optional secondary tiers), then loading hits back to GPU. Check compatibility with this model, attention layout, and version.
+
+**Important:** vLLM's current API and architecture can differ materially from the older one used in the deck. Pin down version differences before comparing results or copying old flags/configs. Treat public `main` docs as a reference, not as proof of behavior in the checked-out code.
+
+---
+
+## 6. Learning plan: only what is necessary for this problem
+
+Learn in the order that helps answer the engineering questions. A deep distributed-training course is not the starting point for this task.
+
+### Stage 1 — Qwen2.5-VL visual processing
+
+Understand:
+
+- how image resolution and image processor settings determine visual tokens/patches;
+- how Qwen2.5-VL's vision encoder produces visual features;
+- how those features enter the language model's token sequence;
+- image hashes/identifiers and whether two requests are considered the same multimodal input;
+- crop creation, resizing, grid/patch handling and how crops change the prompt;
+- Qwen's positional treatment (including MRoPE where relevant) and why arbitrary reuse/reordering of visual tokens could be incorrect.
+
+**Exit criterion:** you can explain which computations happen once per image, which happen during decoder prefill, and which happen again when a crop is added.
+
+### Stage 2 — KV cache and prefix caching
+
+Understand:
+
+- what K and V tensors store, and how memory scales with layers, KV heads, token count and dtype;
+- paged/block-based KV allocation and block-size alignment;
+- prefix cache keys/hashes and why identical token IDs alone may not be enough for multimodal prompts;
+- refcounts / active use versus unreferenced cached blocks;
+- LRU eviction, eligible victims, prefix-tree/hash semantics and partial-prefix reuse;
+- request cancellation, block freeing and lifecycle;
+- model/adapter versions and why stale KV state cannot be reused after weights change.
+
+**Exit criterion:** you can trace an image/question prefix through cache lookup, hit/miss, allocation, use, retention, eviction and later re-prefill.
+
+### Stage 3 — Multimodal encoder cache
+
+Understand the separate encoder cache's key/identifier, capacity accounting, allocation, reuse and eviction. Verify whether it caches encoder embeddings, encoder tokens or another representation in the exact vLLM version. Confirm how resolution/crops and preprocessing affect cache identity.
+
+**Exit criterion:** your benchmark can tell whether the vision tower reran, the decoder prefill reran, both ran, or neither ran.
+
+### Stage 4 — vLLM scheduler, workload batching and cache offloading
+
+Understand scheduler admission, max number of running requests, batching, prefill/decode interaction, prefix-cache reuse across distinct requests, and encoder-budget decisions. Then understand CPU offloading and the latency/throughput tradeoff of moving KV data instead of recomputing it.
+
+**Exit criterion:** you can explain why increasing concurrency could reduce throughput in this workload even if it raises instantaneous batch size, and compare GPU retention, CPU offload and recomputation costs.
+
+### Stage 5 — RL rollout semantics
+
+Understand only the parts required by the workload:
+
+- a question yields `G` sampled rollouts (GRPO grouping);
+- the initial image/question prefix may be shared; generated thoughts, tool calls and crop content can diverge;
+- rollouts from one policy version may reuse valid cache state while that version remains fixed;
+- after policy weights change, decoder KV state computed under old weights is generally invalid for the new policy;
+- a frozen vision encoder's embeddings may remain reusable across reader updates only if the relevant encoder/projector/preprocessing path and cache key remain valid;
+- rollout generation, reward scoring, log-probability recomputation, policy update and weight synchronization are different cost components.
+
+**Exit criterion:** you can identify the valid reuse window and the invalidation boundary for each cache type.
+
+### What not to prioritize yet
+
+Do not begin with DeepSpeed internals, multi-node networking, custom NCCL collectives, tensor/pipeline parallel kernels, or a new RL algorithm. Learn DDP/FSDP/ZeRO later if the measured bottleneck is in policy training or multi-GPU synchronization rather than rollout caching.
+
+---
+
+## 7. Baseline reproduction plan
+
+The first milestone is a small, deterministic systems benchmark, not an RL training run.
+
+### 7.1 Minimal workload
+
+Build a small harness around the current Qwen2.5-VL/vLLM path that can submit:
+
+- one image and one question;
+- `G` rollouts that have an identical initial prefix;
+- multiple question groups that have distinct images/questions;
+- optional multi-turn zoom/crop continuations matching the actual project path.
+
+For the initial cache test, ensure the requests really have identical compatible prefixes. Log a stable `question_group_id`, `rollout_id`, image-content identifier/hash, policy/model version, and prompt/prefix length (without logging private image contents). Check the exact serialized messages and multimodal inputs rather than assuming they match.
+
+### 7.2 Run these baselines
+
+Use the same model checkpoint, image set, request set, output-length policy and hardware within each comparison. Warm up the runtime and repeat each condition several times.
+
+1. **Single request:** one image/question, one rollout. This gives basic prefill/encoder latency.
+2. **Sequential same-prefix requests:** run multiple rollouts sequentially with the same image/question and inspect whether prefix/encoder cache hits occur.
+3. **Concurrent same-prefix requests:** submit `G=8` equivalent rollouts in the same scheduling window. Test whether they share prefill in the current version.
+4. **Prewarm then rollout group:** reproduce the historical one-token prewarm workaround, but only if supported by the current request API. Confirm that the prewarm's prefix is exactly compatible and the prewarm output is not being included in measurements incorrectly.
+5. **Concurrency/wave sweep:** vary the number of question groups in flight, including a wave near 16 and a larger case near 50 if hardware allows. Do not blindly assume the historical values are optimal on new hardware.
+6. **Encoder-cache budget sweep:** vary budget through supported configuration values; log actual capacity/units and hit rate. Include a budget equivalent to the historical 131k setting only after confirming its meaning in the selected version.
+7. **Prefix-cache comparison:** compare current default/configured prefix caching against the available supported disabled/baseline mode. Discover the supported config rather than copy an obsolete flag.
+8. **Multimodal variation:** test identical images, different images with identical questions, repeated images at the same resolution, and different crops/resolutions. This separates prompt-prefix sharing from encoder-output sharing.
+9. **Cache-pressure test:** add unrelated longer prefixes to induce realistic memory pressure and measure which useful blocks get evicted.
+10. **Tool/crop path:** extend the same experiments to a second pass where crop(s) are appended. Verify precisely which portion of the prefix remains shareable and where trajectories branch.
+
+### 7.3 First reproduction target from the slides
+
+Try to reproduce the historical observation:
+
+- eight rollout copies without prewarm;
+- one prewarm request followed by eight rollout copies;
+- wave scheduling (around 16 question groups) versus all groups concurrently (around 50 in the historical setup);
+- encoder-cache budget sweep around the deck's 131k setting.
+
+Record whether the same problem still exists. If current vLLM already shares the prefix correctly, do not force the old workaround; identify the remaining bottleneck instead.
+
+### 7.4 Do not conflate the metrics
+
+Measure decoder KV-cache and encoder-cache behavior separately. A decoder prefix-cache hit does not prove that the vision encoder cache hit; an encoder hit does not prove decoder KV reuse.
+
+---
+
+## 8. Instrumentation requirements
+
+Build a minimal, low-overhead measurement plan before writing an optimization. Prefer existing vLLM metrics/events and add instrumentation only where needed. Ensure instrumentation itself doesn't materially change scheduling or runtime.
+
+For each request/rollout group, capture where possible:
+
+### Request / workload metadata
+
+- question group ID and rollout ID;
+- model/adapter/policy version;
+- image ID or privacy-safe image content hash;
+- original image resolution, processed resolution and crop sizes;
+- image/visual-token count, text-prompt token count, generated token count;
+- number of requested rollouts and concurrent question groups;
+- whether the request is a prewarm, first pass, crop pass, or final answer pass.
+
+### Decoder KV cache
+
+- prefix-cache hit/miss and number of reused prefix tokens/blocks;
+- computed/recomputed prefill tokens;
+- blocks allocated/freed/retained/evicted;
+- eviction reason and whether the block was eligible (e.g., no active references);
+- cache occupancy/free-block count over time;
+- prefill duration and, if available, layer/phase timing;
+- cache lookup/retrieval latency and external load/offload bytes and time.
+
+### Vision encoder cache
+
+- cache hit/miss by multimodal item;
+- number of encoder embeddings/slots used and available;
+- eviction count and reused embeddings;
+- vision-encoder forward count and time;
+- image preprocessing time, measured separately from GPU encoder time.
+
+### Whole pipeline
+
+- first-token latency and total rollout latency (median and p95/p99 if sample size permits);
+- rollouts/answers per second and questions per second;
+- wall-clock seconds per RL step;
+- GPU-seconds per rollout and per trained sequence where applicable;
+- GPU utilization, GPU memory allocated/reserved, peak memory, CPU memory use;
+- CPU↔GPU transfer bytes and latency for offload variants;
+- reward/accuracy and output equivalence.
+
+If a field is not exposed, mark it “not available” and explain the instrumentation plan. Do not invent values. Prefer per-step deltas and aggregated counters rather than enormous per-token logs.
+
+---
+
+## 9. Candidate solution space to explore (do not select prematurely)
+
+The coding agent should independently reason about and rank these possibilities after baseline profiling. Some may be unnecessary if existing vLLM behavior already addresses the issue.
+
+### A. Rollout-group-aware scheduling / wave size
+
+Schedule rollouts sharing a prefix close together so the shared KV state is more likely to be resident when siblings need it. Limit the number of unrelated question groups admitted at once to control cache pressure. Consider whether a wave-based admission policy or simple group ordering already obtains most of the gain.
+
+Risks: less batching opportunity, idle GPU capacity, fairness/starvation, stragglers when groups have different output lengths, and potential coupling between samples. Tune using end-to-end throughput, not cache hit rate alone.
+
+### B. Prewarm / staged rollout admission
+
+A cheap request can populate the prefix cache before sibling rollouts are submitted. Reproduce the historical one-token prewarm result first. Evaluate whether current vLLM can share concurrent identical-prefix prefill without this, or whether a scheduler/prewarm change is still useful.
+
+Risks: extra model invocation, overhead when the cache already hits, request construction mismatch, and invalid reuse after policy weights change.
+
+### C. Workload-aware retention/admission/eviction
+
+The current prefix cache should be inspected for its exact policy (vLLM's documented prefix-cache design uses hash-indexed blocks, reference counts for active users, and LRU-style eviction among eligible cached blocks, with a longest-prefix/leaf tie-break described in the documentation). Consider whether the rollout workload justifies a more informed policy, such as protecting a prefix shared by several pending sibling rollouts or considering expected reuse probability, recomputation cost, prefix size, and retention horizon.
+
+Possible features for an eviction/retention score:
+
+- expected number of remaining sibling rollouts;
+- number of recent/future references to the same question/image prefix;
+- decoder prefill cost avoided by retaining the block;
+- cache footprint (bytes or token blocks);
+- probability that a block will be reused before the end of the policy version;
+- time to retrieve from CPU tier versus time to recompute;
+- policy/model version and cache validity window.
+
+Do not implement a custom policy until the baseline shows LRU is causing material avoidable recomputation. Current vLLM's **CPU offloading tier** documents support for built-in `lru`/`arc` policies and a custom policy interface in current main; verify whether that path supports the cache scope needed here. A custom offload-tier policy is not the same thing as replacing GPU-resident prefix-cache eviction.
+
+Risks: a “smart” policy can have overhead and make hit rate look better while slowing throughput; overly protected items can crowd out more valuable cache blocks. Include admission control and eviction as distinct decisions if useful.
+
+### D. CPU/off-device KV offloading
+
+Compare retaining blocks on GPU versus offloading completed reusable prefix blocks to pinned CPU memory and loading them back on demand. Test vLLM's current `OffloadingConnector` and/or LMCache before building a custom tier. Consider selective offload of only the long visual prefix / first `N` prompt tokens, leaving low-value generated tails out of the tier if the API permits it.
+
+Compare transfer latency and throughput against simply recomputing the prefix. Offloading is only worthwhile when retrieval is cheaper than recomputation at the relevant concurrency and memory pressure. Secondary storage is slower and should only be explored after CPU tier behavior is understood.
+
+Risks: transfer contention, CPU RAM limits, asynchronous synchronization, connector incompatibility with the model/version/parallelism, block-layout differences, duplicate storage, and cache invalidation after weight updates.
+
+### E. Encoder-output cache policy / budget management
+
+Treat the encoder cache as a separate problem. Determine if the expensive vision tower is being rerun; tune its budget, retention, and request grouping. In the deck's historical test, increasing the encoder cache to 131k (units as configured there) improved throughput by 33%. Replicate, but verify units and current behavior. Avoid spending a lot of effort on the encoder cache if trace evidence says decoder KV prefill is the dominant repeat cost.
+
+### F. Selective prefix caching
+
+Evaluate if the most valuable reusable state is limited to the initial image+question prefix. The generated reasoning/tool/crop suffix often diverges across rollouts and can consume KV space without much cross-rollout reuse. If the runtime supports per-request selective offload/loading or if a cache policy can prioritize the shared prefix, measure this. Do not break prefix hash correctness or assume all multimodal tokens are a single cacheable item.
+
+### G. Reuse of visual embeddings or intermediate representations
+
+The broader project plan mentions reusing visual tokens, potentially selecting a subset/superset, and testing in Hugging Face before porting to vLLM. This is a separate avenue from decoder KV-cache eviction:
+
+- reusing the encoder embeddings can avoid the vision tower;
+- reusing decoder KV can avoid decoder prefill;
+- changing the visual-token subset or crop resolutions changes the model input and may change accuracy.
+
+For the user's immediate task, start with lossless cache reuse/retention/offload and scheduling. Only explore token subset/superset or lower-resolution approximations if cache-only approaches fail or a clear cost bottleneck justifies them. Any lossy visual-token method needs explicit accuracy/reward evaluation.
+
+### H. Cross-version invalidation and safety
+
+A cache hit is valid only when the cached state corresponds to the same compatible computation. In particular:
+
+- decoder KV computed under old language-model weights cannot be reused after a policy update;
+- LoRA/adapter identity and version may need to be part of the cache namespace;
+- encoder embeddings can only survive an RL update if every weight and preprocessing component that affects them remains unchanged;
+- the current vLLM code has an encoder-cache reset path tied to weight updates; inspect and preserve the correct invalidation semantics;
+- crop order, resolution, processor configuration, image identity, positional inputs and multimodal hashes must be respected.
+
+Do not optimize away cache invalidation. Add a regression test that proves cache state from a previous policy version is not used by the next version.
+
+---
+
+## 10. Experimental design and metrics
+
+### 10.1 Baselines that should be compared
+
+At minimum, compare relevant and actually supported configurations:
+
+1. Current vLLM configuration, as checked out.
+2. Current prefix caching configured off (if supported) as a diagnostic control.
+3. Prefix caching on, no prewarm versus prewarm.
+4. Current cache policy with several concurrency/wave sizes.
+5. Encoder-cache budget sweep.
+6. Current vLLM KV offloading, with a CPU-tier budget sweep, if supported.
+7. LMCache or another external KV-cache layer only after confirming compatibility and establishing the baseline.
+8. Proposed scheduler/cache method, compared against the best existing configuration rather than only against a deliberately poor default.
+
+For fairness, use the same data, prompt, crop process, model version, precision, sampling settings, generation caps, warmup and hardware within each comparison. Repeat conditions; report median plus spread, not a single best run.
+
+### 10.2 Workload matrix
+
+Vary controlled factors rather than running an enormous grid all at once:
+
+- rollouts per question `G`: e.g., 1, 4, 8, 16 where supported;
+- concurrent question groups: e.g., 1, 4, 8, 16, then larger pressure cases such as 32/50 if hardware permits;
+- image profile: small, 4K, 8K / large documents, and multiple crop counts;
+- repeated same image vs unique image per question;
+- same initial prompt vs small changes that should invalidate prefix reuse;
+- one-turn answer vs multi-turn crop/tool loop;
+- cache budget and KV block occupancy;
+- prewarm/no-prewarm;
+- cache GPU-only vs supported CPU offload;
+- one fixed model version vs deliberate weight-version boundary.
+
+Do not run all combinations before establishing a minimal baseline. Select factors from an initial profile and use focused ablations.
+
+### 10.3 Primary metrics
+
+The primary performance measure is **end-to-end rollout throughput / RL-step time**, not hit rate alone. Report:
+
+- wall-clock time per fixed rollout batch / RL step;
+- questions per second and completed rollouts per second;
+- total GPU-seconds per rollout and per trained sequence if training is included;
+- decoder prefill time and count of visual-prefix tokens recomputed;
+- encoder-forward count/time and encoder-cache hit rate;
+- decoder prefix hit rate and number of blocks/tokens reused;
+- eviction/recompute counts under memory pressure;
+- cache occupancy, memory peak and CPU/GPU transfer time/bytes;
+- first-token/total latency distribution, including p95 if adequate samples;
+- task accuracy or reward and policy/output consistency.
+
+### 10.4 Correctness requirements
+
+For lossless cache-policy changes, output semantics must not change. Test with deterministic decoding first and compare generated token IDs. Where numerical nondeterminism makes exact token equality inappropriate, compare logits/log-probabilities within a documented tolerance and evaluate task-level results. For offloaded cache bytes, test round-trip integrity and compare against fresh recomputation.
+
+For any lossy token reuse/downsampling/resolution change, state clearly that it is not a cache-only optimization and run separate accuracy/reward experiments on V*, HR-Bench 4K/8K, and any relevant OCR/document/regular-image sets. Do not claim “no accuracy loss” from a small or underpowered sample.
+
+### 10.5 Reproducibility
+
+- Record seed, commit, configs, GPU type, driver/CUDA, model revision and exact command.
+- Warm up before timing and separate compilation/cold-start time from steady-state time.
+- Repeat each configuration at least 3 times when resources permit; add more repetitions for noisy results.
+- Use paired request sets for comparisons.
+- Report all failed runs and memory/OOM cases.
+- Include raw structured logs and a script that generates the summary table/plots.
+- Avoid relying on single run numbers; the original deck itself labels many initial results as experimental / single-run.
+
+---
+
+## 11. Key questions the agent must answer
+
+Before committing to an implementation, provide evidence-based answers to the following:
+
+### Behavior and code path
+
+1. In the checked-out vLLM version, do multiple identical-prefix rollout requests in the same scheduling step share prefill, or does each run it independently? Under which conditions?
+2. Is the historical prewarm workaround still needed? If yes, why exactly? If not, what has changed?
+3. What precisely makes two multimodal prefixes cache-compatible in Qwen2.5-VL: token IDs, image hashes, processor outputs, cache salts, adapter IDs, positions, and block alignment?
+4. Does an encoder-cache hit still leave the decoder to recompute its visual-token prefill? Prove this with a trace/timing experiment.
+5. Which part is evicting in the observed run: decoder KV-cache blocks, encoder outputs, both, or an external tier? What telemetry proves it?
+6. What happens to active references when rollouts run concurrently? Which blocks are eligible for eviction, and at what point does a completed request's prefix become evictable?
+7. How much prefill work is actually shared between the first image/question pass and the crop pass? Which exact suffix changes after adding a crop?
+8. When does RL weight synchronization happen, and how are stale caches invalidated?
+
+### Existing solutions / prior art
+
+9. Does native vLLM APC solve the within-group reuse problem once requests are submitted in a compatible order?
+10. Can admission scheduling/wave size solve the observed thrash without code changes?
+11. Does the current offloading connector or LMCache already keep the required prefix in CPU memory and recover it fast enough? What is the transfer-vs-recompute crossover point?
+12. Is there a supported custom eviction policy at the relevant cache layer, or only in a different tier? Which code extension point would be required?
+13. What recent literature or existing implementations solve repeated multimodal prompt caching for multi-sample RL? Distinguish actual support from marketing-level similarity. Record paper date, code release, version and limitations.
+
+### Research value
+
+14. What baseline remains after existing vLLM configuration and supported offloading are tuned?
+15. What is the specific new mechanism, and why should it beat LRU/wave scheduling/offloading?
+16. What is the overhead of tracking rollout group IDs, reuse estimates, pinning, cache policy decisions, or extra scheduling constraints?
+17. Is the gain visible in end-to-end RL-step time, not just cache hit rate or microbenchmark prefill time?
+
+The agent should not declare a novel contribution until these questions are addressed.
+
+---
+
+## 12. Suggested implementation milestones
+
+### Milestone 0 — Environment / code-path report
+
+Deliver a short note listing actual runtime versions, paths traced, cache settings and where the cache is allocated, reused, and evicted. No patch required.
+
+### Milestone 1 — Reproducible cache benchmark
+
+Deliver a minimal script or test harness reproducing same-prefix rollout requests, prewarm/no-prewarm, wave-size and encoder-cache budget sweeps. Save structured logs and a summary table. Establish whether the slide's observations reproduce in the current stack.
+
+### Milestone 2 — Instrumented cache lifecycle
+
+Add the smallest necessary metrics for decoder-prefix hits/misses/evictions/recomputed tokens and encoder-cache hits/misses/evictions/recomputed encoder work. Keep instrumentation configurable and low overhead. Submit a code-path diagram and sample trace.
+
+### Milestone 3 — Baseline tuning / existing alternatives
+
+Try configuration and scheduling changes first. Compare native prefix cache, encoder cache, CPU offloading, and LMCache where compatible. Identify the best non-new-method baseline.
+
+### Milestone 4 — Candidate method
+
+Based on evidence, propose 2–3 possible methods and rank them by expected speedup, risk, implementation cost, correctness risk and novelty. Then implement the most defensible minimal version behind a feature flag/config. Add unit/integration tests.
+
+Potential candidates include rollout-group-aware scheduling, retention of high-reuse image/question prefix blocks, selective offload of expensive shared prefixes, or an alternative cache policy. These are options to evaluate, not decisions already made.
+
+### Milestone 5 — Controlled evaluation
+
+Run repeated paired tests against the best baseline under a fixed GPU-memory budget. Report speed/throughput, memory use, encoder and KV cache behavior, transfer overhead, output correctness, and accuracy/reward where relevant.
+
+### Milestone 6 — End-to-end RL validation
+
+After the systems-only win is established, run a small GRPO setup with a fixed number of questions and rollouts. Verify end-to-end step-time improvements across multiple policy updates and verify cache invalidation at each weight-version boundary. Only then scale the evaluation.
+
+### Required deliverables
+
+- `README.md` updates or a research note describing the actual implementation path;
+- benchmark script(s) and exact run commands;
+- raw logs plus an aggregation script/table;
+- code change with tests and a feature flag/config if applicable;
+- before/after comparison against the best existing baseline;
+- a concise methodology note documenting what is novel, what prior art already does, and remaining limitations.
+
+---
+
+## 13. Risks and common mistakes
+
+1. **Conflating encoder outputs with decoder KV.** These are different caches and save different computation. Instrument them independently.
+2. **Assuming a cache miss means the image encoder reran.** It may only mean decoder prefill was recomputed; verify both paths.
+3. **Assuming the slide's old vLLM bug/limitation still exists.** The prewarm observation is a reproduction target, not a timeless fact.
+4. **Optimizing hit rate rather than throughput.** A policy can increase hits while making transfers, scheduling or latency worse.
+5. **Using an oversized synthetic benchmark only.** Include realistic image resolutions, variable prompt/crop lengths, tool turns and rollouts.
+6. **Reusing stale KV after an RL weight update.** This is a correctness bug, not an acceptable performance tradeoff.
+7. **Ignoring multimodal hashes and positional details.** Reordering, cropping or changing image processing can make two prompts incompatible even if their text looks similar.
+8. **Treating crop outputs as shared.** Different rollouts may select different crops and have divergent suffixes. Only the exact common compatible prefix is reusable.
+9. **Jumping straight to DeepSpeed/distributed training.** First prove that repeated rollout computation or cache churn is a material bottleneck. Learn distributed training later if measurements show synchronization/training is dominant.
+10. **Reporting stale public API flags as guaranteed.** vLLM and LMCache evolve rapidly; confirm every configuration against the checked-out commit and installed packages.
+11. **Claiming novelty before checking prior art.** Native APC, encoder caching, CPU offloading, LMCache and alternate policies must be baseline comparisons.
+12. **Accepting lossy visual-token changes as “cache optimizations.”** If the method changes visual inputs, separately measure model quality and call it a quality/compute tradeoff.
+13. **Over-instrumenting the hot path.** First measure the instrumentation overhead and avoid per-token logs when counters/timestamps suffice.
+14. **Using the wrong memory term.** On the target A100, describe GPU memory/HBM/VRAM rather than SRAM unless discussing actual on-chip SRAM.
+
+---
+
+## 14. First-day checklist
+
+An agent should start by doing these in sequence:
+
+- [ ] Inspect the repository, read its top-level README, identify branch/commit and current model/runtime versions.
+- [ ] Locate the actual Qwen2.5-VL rollout path and determine whether it is DeepEyes-style, RPN-based, or both.
+- [ ] Trace one image/question request through preprocessing, vision encoding, decoder prefill, KV cache lookup and generation.
+- [ ] Locate the KV-cache manager, encoder-cache manager, scheduler and weight-update/cache-reset path in the actual vLLM version.
+- [ ] Explain in writing the difference between a decoder prefix-cache miss and an encoder-cache miss for this workload.
+- [ ] Implement or adapt a minimal same-image/same-question `G=8` rollout benchmark.
+- [ ] Compare no prewarm vs prewarm and record whether the exact common prefix is reused.
+- [ ] Create a baseline table showing rollout throughput, prefill time, encoder time, cache hits/misses/evictions and peak GPU memory.
+- [ ] Only after these steps, recommend a candidate algorithm/implementation.
+
+### The first question to answer
+
+**When eight rollouts for the same image/question are issued on the current stack, what exact computation is repeated, and why does the relevant cached state fail to survive until its next use?**
+
+Answer that with code-path evidence and a measured trace before attempting to “solve KV caching.”
+
+---
+
+## 15. Reference links
+
+### Core code and docs
+
+- [vLLM repository](https://github.com/vllm-project/vllm)
+- [vLLM prefix-caching design](https://github.com/vllm-project/vllm/blob/main/docs/design/prefix_caching.md)
+- [vLLM `KVCacheManager`](https://github.com/vllm-project/vllm/blob/main/vllm/v1/core/kv_cache_manager.py)
+- [vLLM `EncoderCacheManager`](https://github.com/vllm-project/vllm/blob/main/vllm/v1/core/encoder_cache_manager.py)
+- [vLLM scheduler](https://github.com/vllm-project/vllm/blob/main/vllm/v1/core/sched/scheduler.py)
+- [vLLM GPU model runner](https://github.com/vllm-project/vllm/blob/main/vllm/v1/worker/gpu_model_runner.py)
+- [vLLM KV-offloading guide](https://github.com/vllm-project/vllm/blob/main/docs/features/kv_offloading_usage.md)
+- [vLLM metrics documentation](https://docs.vllm.ai/en/latest/usage/metrics/)
+- [LMCache repository](https://github.com/lmcache/lmcache)
+- [LMCache quickstart](https://docs.lmcache.ai/getting_started/quickstart.html)
+
+### Model, workload, RL and RPN
+
+- [Qwen2.5-VL in Transformers](https://github.com/huggingface/transformers/blob/main/docs/source/en/model_doc/qwen2_5_vl.md)
+- [Hugging Face Transformers](https://github.com/huggingface/transformers)
+- [DeepEyes](https://github.com/Visual-Agent/DeepEyes)
+- [Vision-RL²](https://github.com/YuHengsss/VisionRL2)
+- [verl](https://github.com/volcengine/verl)
+
+---
+
+## Final instruction to the agent
+
+Work as a research engineer, not merely a code generator. First establish the actual behavior and the best existing baseline; then identify a real unresolved bottleneck; then propose and test a minimal method. Be explicit about uncertainty and distinguish:
+
+- **Observed fact:** reproduced in the current checkout with logs/measurements.
+- **Historical observation:** reported in the original project slides, reproduced or not reproduced yet.
+- **Hypothesis:** a proposed explanation or method requiring an experiment.
+- **Claimed contribution:** a result that has beat the strongest relevant baseline under controlled evaluation.
+
+Do not make broad code changes or claim a research contribution until the measurements support it. The immediate target is **less repeated image/prompt prefill and less cache thrashing across RL rollouts, at the same GPU-memory budget and without invalid cache reuse**.
