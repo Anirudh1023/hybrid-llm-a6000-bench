@@ -18,7 +18,7 @@ The core hypothesis to investigate is:
 
 > A rollout-aware cache-management and scheduling strategy can reduce repeated multimodal prefill work and/or vision-encoder work, improving end-to-end rollout throughput and RL-step time under a fixed GPU-memory budget, while preserving model outputs and task reward.
 
-Do **not** assume this hypothesis is already proved, nor that a custom eviction policy is automatically needed. Current vLLM already has automatic prefix caching, a separate multimodal encoder-output cache, KV-cache offloading facilities, and configurable eviction policies for the offloading tier. The first task is to reproduce the observed behavior on the repository's actual software version, profile it, and determine what remains unsolved by existing mechanisms.
+Do **not** assume this hypothesis is already proved, nor that a custom eviction policy is automatically needed. Current vLLM already has automatic prefix caching, a separate multimodal encoder-output cache, KV-cache offloading facilities, and configurable eviction policies for the offloading tier. Prior art is also more substantial than generic LLM prefix caching: **VLCache** directly studies visual KV reuse for Qwen2.5-VL, **Long-RL** caches visual/video embeddings in an RL pipeline, and the recent **LoRe** work modifies visual value-cache entries as part of RL-trained visual reasoning. Their exact scope differs, so the first task is to study these works, reproduce the observed behavior on the repository's actual software version, and determine what remains unsolved by existing mechanisms. Do not claim novelty until this comparison is documented.
 
 ### What success looks like
 
@@ -219,6 +219,33 @@ These are likely useful in a current vLLM V1 checkout. Verify paths/signatures a
 
 **Important:** vLLM's current API and architecture can differ materially from the older one used in the deck. Pin down version differences before comparing results or copying old flags/configs. Treat public `main` docs as a reference, not as proof of behavior in the checked-out code.
 
+### 5.6 Prior-art update and novelty checks (reviewed 2026-10-27)
+
+This is an initial engineering-focused prior-art map, not a complete literature review. Read the papers and inspect the actual code/configuration before deciding what is novel. Some results below are on different inference engines or workloads, so do not compare headline speedups as if they were apples-to-apples.
+
+| Work / system | What it already addresses | Relation to this project | Required investigation |
+|---|---|---|---|
+| **[VLCache paper](https://arxiv.org/abs/2512.12977), [reference repository](https://github.com/Odysseusq/VLCache), [SGLang implementation](https://github.com/ibifrost/VLCache)** | Directly targets expensive visual-token computation and reuse for Qwen2.5-VL. The project describes position-agnostic reuse of visual KV cache and encoder cache across repeated image inputs, including requests with different text prompts, with dynamic recomputation to control reuse error. Its public optimized implementation is built on SGLang; the other repository is a minimal Nano-vLLM-based proof of concept. | **Highest-priority prior art for visual KV reuse.** It may overlap with the broader idea of avoiding repeated visual-prefix work. It is not, based on the public description alone, proof that DeepEyes' multi-rollout GPU-cache eviction/thrashing problem is solved inside vLLM. | Read the paper; identify assumptions about repeated image, prompt position, model layers, and cache lifetime; run its supported implementation if feasible. Determine whether the current DeepEyes workload benefits from its position-agnostic partial reuse, and clearly separate that method from ordinary cache retention/offloading. Do not claim “first visual KV reuse” or compare raw speedups across engines. |
+| **[Long-RL / MR-SP](https://github.com/NVlabs/Long-RL), [paper](https://arxiv.org/abs/2507.07966)** | A long-video VLM RL stack with a vLLM-based rollout engine. Its README documents precomputed/cached video embeddings used during RL training to avoid repeatedly encoding long videos, alongside sequence-parallel infrastructure. It supports Qwen-family models. | Relevant to **encoder-side reuse inside RL**, particularly where the same long visual media is encountered repeatedly. It does not by itself establish eviction-aware reuse of decoder KV blocks across sibling DeepEyes rollouts. | Inspect the embedding cache implementation and whether it reuses in-memory vision outputs, precomputes to disk, or both. Use it to distinguish encoder savings from decoder prefill/KV savings. Compare only the relevant mechanism, not the full distributed training stack. |
+| **[LoRe: Look Before You Reason](https://arxiv.org/abs/2610.27341), [project page](https://zerchen.github.io/projects/lore.html)** | NeurIPS 2026 work posted on 2026-10-19. It predicts a region and strengthens corresponding **value-cache entries within the same generation request**, so the model can reason without appending crops or issuing explicit zoom-tool calls; RL trains the region-selection behavior. | Important related work for **visual reasoning that manipulates KV-cache state** and for framing the broader proposal. Its stated mechanism is visual-evidence steering in a live request, not a cross-request eviction/retention/offloading policy for shared rollout prefixes. | Read method and appendix. Check the project page's code link/release status at implementation time. Distinguish cache *contents/modulation* from cache *residency/reuse across requests*. This work may narrow claims about RL-guided visual KV manipulation even if it does not solve the systems problem here. |
+| **[vLLM automatic prefix caching](https://github.com/vllm-project/vllm/blob/main/docs/design/prefix_caching.md)** | Hash-based reuse of compatible KV blocks for shared prefixes; current documented GPU-cache behavior evicts eligible blocks according to the cache policy when capacity is exhausted. | Necessary baseline; it might already handle same-prefix rollouts if request order, timing, cache compatibility and capacity are suitable. | Reproduce the deck's same-step rollout observation on the checked-out version. Confirm the actual eviction policy and when blocks become eligible for eviction. |
+| **[vLLM KV offloading](https://github.com/vllm-project/vllm/blob/main/docs/features/kv_offloading_usage.md)** | Offloads completed KV blocks to CPU and optional secondary tiers, promoting hits back to GPU. Current docs expose built-in `lru`/`arc` policies and an out-of-tree custom eviction-policy interface for the **offloading tier**. | A direct baseline for retaining reusable state beyond GPU capacity. Note that this custom policy extension point is not automatically a custom policy for the GPU-resident prefix cache. | Measure CPU transfer/promotion latency versus recomputation. Verify selected-version compatibility and whether the offload path can preserve the relevant shared prefix. Compare LRU/ARC before inventing a new tier policy. |
+| **[LMCache](https://github.com/LMCache/LMCache)** | General-purpose KV-cache reuse/offloading across requests and memory tiers. | Potential reuse/offloading baseline, but compatibility and integration cost for the exact Qwen2.5-VL + DeepEyes rollout path must be verified. | Run a small compatibility check; confirm whether keys/hash identity and multimodal cache semantics work for the repeated prefix. Measure rather than assume gains. |
+
+#### Two DeepEyes/verl implementation details to inspect before changing cache policy
+
+1. **`free_cache_engine` and memory release.** Some verl rollout configurations expose `actor_rollout_ref.rollout.free_cache_engine`, described as offloading/releasing the KV cache after the rollout-generation stage to free resources for the training phase. Search the actual checked-out DeepEyes/verl configuration and implementation to establish whether this option exists, its default, and exactly what it releases. Do not assume it is enabled in the project version. Releasing the rollout cache between RL phases may be a deliberate memory trade-off and can make reuse across phases impossible; it is different from an ordinary KV-block eviction during a batch of rollout requests.
+2. **Cache invalidation after policy-weight updates.** Cache entries computed using old policy weights must not be silently reused after the rollout model changes. [verl issue #6523](https://github.com/verl-project/verl/issues/6523) documented a gap where the prefix/KV cache was reset after weight updates but multimodal/encoder cache entries were not all reset in the affected path. The corresponding [PR #6522](https://github.com/verl-project/verl/pull/6522) was merged into `verl-project/verl:main` on 2026-06-02 and added a `clear_all_caches` path. Do not assume the fix is present in the DeepEyes checkout or its pinned verl submodule: check commit ancestry, installed versions, and the actual weight-update path. Correct invalidation is a requirement, not an optimization to remove.
+3. **Interpret DeepEyes' large hardware recommendation correctly.** The [official DeepEyes README](https://github.com/Visual-Agent/DeepEyes#start-training) recommends at least 32 GPUs for its full 7B training recipe and 1,200 GB CPU RAM per node for its high-resolution datasets; it also starts a separate Qwen2.5-72B judge service. That is not a requirement for the first cache-only benchmark. Use the A6000 for single-GPU inference/cache experiments and a small selected image set. This phase can validate the cache hypothesis, but it does **not** demonstrate that the entire RL training run (weights, gradients, optimizer state, activations and reward/judge computation) fits on one GPU. The broader project goal is to lower the cost/resource requirement of the full RL workflow, so report cache-level and end-to-end claims separately.
+
+#### Scope implication
+
+The initial proposal should **not** be “implement KV caching for VLMs” or “use RL to optimize a visual cache.” Those are too broad given the prior art above. A candidate research question is narrower:
+
+> Under a fixed, small GPU-memory budget, can rollout-group-aware cache lifetime/admission/scheduling and/or supported offloading reduce *recomputation caused by cache eviction* for multi-turn high-resolution VLM RL, beyond native vLLM prefix caching, prewarm/wave scheduling, VLCache-style visual reuse where applicable, and CPU-tier offloading—without invalid reuse across policy updates?
+
+This is a hypothesis, not a novelty claim. If existing methods eliminate the bottleneck in a faithful reproduction, revise the research question rather than forcing a new cache policy.
+
 ---
 
 ## 6. Learning plan: only what is necessary for this problem
@@ -312,6 +339,7 @@ Use the same model checkpoint, image set, request set, output-length policy and 
 8. **Multimodal variation:** test identical images, different images with identical questions, repeated images at the same resolution, and different crops/resolutions. This separates prompt-prefix sharing from encoder-output sharing.
 9. **Cache-pressure test:** add unrelated longer prefixes to induce realistic memory pressure and measure which useful blocks get evicted.
 10. **Tool/crop path:** extend the same experiments to a second pass where crop(s) are appended. Verify precisely which portion of the prefix remains shareable and where trajectories branch.
+11. **Existing methods:** review VLCache and Long-RL before settling on a method. Where feasible, benchmark VLCache using its supported SGLang implementation as a separate reference experiment; do not present cross-engine latency as a controlled vLLM comparison. Inspect whether Long-RL's cached-embedding mechanism addresses encoder-side cost in this workload.
 
 ### 7.3 First reproduction target from the slides
 
@@ -408,7 +436,7 @@ Possible features for an eviction/retention score:
 - time to retrieve from CPU tier versus time to recompute;
 - policy/model version and cache validity window.
 
-Do not implement a custom policy until the baseline shows LRU is causing material avoidable recomputation. Current vLLM's **CPU offloading tier** documents support for built-in `lru`/`arc` policies and a custom policy interface in current main; verify whether that path supports the cache scope needed here. A custom offload-tier policy is not the same thing as replacing GPU-resident prefix-cache eviction.
+Do not implement a custom policy until the baseline shows LRU is causing material avoidable recomputation. Current vLLM's **CPU offloading tier** documents support for built-in `lru`/`arc` policies and a custom policy interface in current main; verify whether that path supports the cache scope needed here. A custom offload-tier policy is not the same thing as replacing GPU-resident prefix-cache eviction. Before proposing novelty, compare with VLCache's position-agnostic visual-KV reuse and dynamic recomputation; it targets a different but strongly overlapping source of repeated visual computation.
 
 Risks: a “smart” policy can have overhead and make hit rate look better while slowing throughput; overly protected items can crowd out more valuable cache blocks. Include admission control and eviction as distinct decisions if useful.
 
@@ -540,14 +568,16 @@ Before committing to an implementation, provide evidence-based answers to the fo
 10. Can admission scheduling/wave size solve the observed thrash without code changes?
 11. Does the current offloading connector or LMCache already keep the required prefix in CPU memory and recover it fast enough? What is the transfer-vs-recompute crossover point?
 12. Is there a supported custom eviction policy at the relevant cache layer, or only in a different tier? Which code extension point would be required?
-13. What recent literature or existing implementations solve repeated multimodal prompt caching for multi-sample RL? Distinguish actual support from marketing-level similarity. Record paper date, code release, version and limitations.
+13. What recent literature or existing implementations solve repeated multimodal prompt caching for multi-sample RL? At minimum, assess VLCache (visual KV/encoder reuse), Long-RL/MR-SP (cached video embeddings for RL), LoRe (within-request value-cache modulation), and general-purpose LMCache. Distinguish their actual mechanisms and deployment engines; record paper date, code availability, version and limitations.
+14. Does the active DeepEyes/verl configuration free or offload the rollout KV cache after a rollout phase (e.g., through `free_cache_engine`), and how does this interact with the reuse window we want to optimize?
+15. Are all decoder, multimodal-processor, and encoder caches invalidated correctly after policy-weight updates? Check the current state of [verl issue #6523](https://github.com/verl-project/verl/issues/6523) and the fix in the selected version.
 
 ### Research value
 
-14. What baseline remains after existing vLLM configuration and supported offloading are tuned?
-15. What is the specific new mechanism, and why should it beat LRU/wave scheduling/offloading?
-16. What is the overhead of tracking rollout group IDs, reuse estimates, pinning, cache policy decisions, or extra scheduling constraints?
-17. Is the gain visible in end-to-end RL-step time, not just cache hit rate or microbenchmark prefill time?
+16. What baseline remains after existing vLLM configuration, VLCache-style visual reuse where feasible, and supported offloading are tuned?
+17. What is the specific new mechanism, and why should it beat native APC, the historical prewarm/wave-scheduling workaround, existing visual-cache reuse, and offloading?
+18. What is the overhead of tracking rollout group IDs, reuse estimates, pinning, cache policy decisions, or extra scheduling constraints?
+19. Is the gain visible in end-to-end RL-step time, not just cache hit rate or microbenchmark prefill time?
 
 The agent should not declare a novel contribution until these questions are addressed.
 
@@ -608,7 +638,7 @@ After the systems-only win is established, run a small GRPO setup with a fixed n
 8. **Treating crop outputs as shared.** Different rollouts may select different crops and have divergent suffixes. Only the exact common compatible prefix is reusable.
 9. **Jumping straight to DeepSpeed/distributed training.** First prove that repeated rollout computation or cache churn is a material bottleneck. Learn distributed training later if measurements show synchronization/training is dominant.
 10. **Reporting stale public API flags as guaranteed.** vLLM and LMCache evolve rapidly; confirm every configuration against the checked-out commit and installed packages.
-11. **Claiming novelty before checking prior art.** Native APC, encoder caching, CPU offloading, LMCache and alternate policies must be baseline comparisons.
+11. **Claiming novelty before checking prior art.** Native APC, encoder caching, CPU offloading, LMCache, VLCache, Long-RL's cached embeddings, LoRe, and alternate policies must be assessed. These methods are not identical, but they substantially narrow broad novelty claims.
 12. **Accepting lossy visual-token changes as “cache optimizations.”** If the method changes visual inputs, separately measure model quality and call it a quality/compute tradeoff.
 13. **Over-instrumenting the hot path.** First measure the instrumentation overhead and avoid per-token logs when counters/timestamps suffice.
 14. **Using the wrong memory term.** On the target A100, describe GPU memory/HBM/VRAM rather than SRAM unless discussing actual on-chip SRAM.
@@ -621,6 +651,7 @@ An agent should start by doing these in sequence:
 
 - [ ] Inspect the repository, read its top-level README, identify branch/commit and current model/runtime versions.
 - [ ] Locate the actual Qwen2.5-VL rollout path and determine whether it is DeepEyes-style, RPN-based, or both.
+- [ ] Read the VLCache paper and inspect the Long-RL cached-embedding path; skim LoRe to delimit its overlap with cache manipulation. Record exactly what each method does and does not solve.
 - [ ] Trace one image/question request through preprocessing, vision encoding, decoder prefill, KV cache lookup and generation.
 - [ ] Locate the KV-cache manager, encoder-cache manager, scheduler and weight-update/cache-reset path in the actual vLLM version.
 - [ ] Explain in writing the difference between a decoder prefix-cache miss and an encoder-cache miss for this workload.
@@ -651,6 +682,9 @@ Answer that with code-path evidence and a measured trace before attempting to �
 - [vLLM metrics documentation](https://docs.vllm.ai/en/latest/usage/metrics/)
 - [LMCache repository](https://github.com/lmcache/lmcache)
 - [LMCache quickstart](https://docs.lmcache.ai/getting_started/quickstart.html)
+- [VLCache paper (arXiv:2512.12977)](https://arxiv.org/abs/2512.12977)
+- [VLCache reference implementation](https://github.com/Odysseusq/VLCache) (Nano-vLLM-based proof of concept)
+- [VLCache SGLang implementation](https://github.com/ibifrost/VLCache) (check branch/version and benchmark setup before using)
 
 ### Model, workload, RL and RPN
 
@@ -659,6 +693,12 @@ Answer that with code-path evidence and a measured trace before attempting to �
 - [DeepEyes](https://github.com/Visual-Agent/DeepEyes)
 - [Vision-RL²](https://github.com/YuHengsss/VisionRL2)
 - [verl](https://github.com/volcengine/verl)
+- [Long-RL / MR-SP](https://github.com/NVlabs/Long-RL) — RL infrastructure with cached video embeddings
+- [Long-RL paper: Scaling RL to Long Videos](https://arxiv.org/abs/2507.07966)
+- [LoRe paper (arXiv:2610.27341)](https://arxiv.org/abs/2610.27341) — RL-trained region selection and within-request value-cache modulation
+- [LoRe project page](https://zerchen.github.io/projects/lore.html)
+- [verl issue #6523: multimodal caches after weight updates](https://github.com/verl-project/verl/issues/6523)
+- [verl PR #6522: reset all caches after weight updates (merged 2026-06-02)](https://github.com/verl-project/verl/pull/6522)
 
 ---
 
